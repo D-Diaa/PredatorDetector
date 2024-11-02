@@ -1,0 +1,3 @@
+[submodule "external/EmotionDynamics"]
+	path = external/EmotionDynamics
+	url = git@github.com:Priya22/EmotionDynamics.git
