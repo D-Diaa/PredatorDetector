@@ -1,223 +1,168 @@
-import json
 import xml.etree.ElementTree as ET
-from collections import defaultdict
 from datetime import datetime
-from typing import Dict
+from typing import Any, Dict, List
 
-import numpy as np
-import pandas as pd
+import datasets
 from tqdm import tqdm
 
-from extractors import SentimentExtractor, EmotionExtractor, ToxicityExtractor, IntentExtractor
 
+class ConversationLoader:
+    """
+    Loads and parses XML conversation files into a HuggingFace datasets.Dataset.
+    """
 
-class ConversationAnalyzer:
-    def __init__(self, xml_path: str, attackers_path: str):
+    def __init__(self, xml_path: str, max_conversations: int = -1) -> None:
         """
-        Initialize the analyzer with paths to the XML conversation data and attackers list.
+        Initializes the ConversationLoader with the path to the XML file.
+
+        Args:
+            xml_path (str): Path to the XML file containing conversation data.
+            max_conversations (int, optional): Maximum number of conversations to load. Defaults to 100.
         """
         self.xml_path = xml_path
-        self.attackers_path = attackers_path
-        self.attackers = set()
-        self.conversations = {}
-        self.extractors = [
-            # LinguisticExtractor(),
-            SentimentExtractor(),
-            EmotionExtractor(),
-            ToxicityExtractor(),
-            IntentExtractor(),
-            # KeywordExtractor(),
-            # MultiLexiconEmotionExtractor()
-        ]
+        self.max_conversations = max_conversations
+        self.dataset = None
 
-        self.extractor_keys = []
-        for extractor in self.extractors:
-            self.extractor_keys.extend(extractor.keys)
+    @staticmethod
+    def parse_time(time_str: str) -> datetime:
+        """
+        Converts a time string to a datetime object.
 
-        self.user_stats = defaultdict(lambda: {
-            'message_count': 0,
-            'conversations': set(),
-            'is_attacker': False
-        })
+        Args:
+            time_str (str): Time string in the format '%H:%M'.
 
-    def load_attackers(self) -> None:
-        """Load the list of known attackers from the text file."""
-        with open(self.attackers_path, 'r') as f:
-            self.attackers = set(line.strip() for line in f)
-
-    def parse_time(self, time_str: str) -> datetime:
-        """Convert time string to datetime object."""
+        Returns:
+            datetime: Parsed datetime object.
+        """
         return datetime.strptime(time_str, '%H:%M')
 
-    def calculate_message_features(self, text: str) -> Dict:
-        """Calculate various features from a message text."""
-        total_chars = len(text)
-        if total_chars == 0:
-            ret = {dim: np.nan for dim in self.extractor_keys}
-            return ret
+    def load_conversations(self) -> List[Dict[str, Any]]:
+        """
+        Parses the XML file and extracts conversation data.
 
-        ret = {}
-        for extractor in self.extractors:
-            features = extractor.extract(text)
-            ret.update(features)
-        return ret
+        Returns:
+            List[Dict[str, Any]]: List of conversations with their messages and metadata.
+        """
+        try:
+            tree = ET.parse(self.xml_path)
+            root = tree.getroot()
+            if self.max_conversations > 0:
+                limit = min(self.max_conversations, len(root.findall('conversation')))
+            else:
+                limit = len(root.findall('conversation'))
+            conversations = root.findall('conversation')[:limit]
+            print(f"Loaded {len(conversations)} conversations from {self.xml_path}.")
+        except ET.ParseError as e:
+            print(f"Error parsing XML file: {e}")
+            return []
+        except FileNotFoundError:
+            print(f"XML file not found at {self.xml_path}.")
+            return []
+        except Exception as e:
+            print(f"An unexpected error occurred while loading conversations: {e}")
+            return []
 
-    def parse_conversations(self) -> None:
-        """Parse the XML file and extract conversation data with features."""
-        tree = ET.parse(self.xml_path)
-        root = tree.getroot()
-        conversations = list(root.findall('conversation'))[:10]
-        for conversation in tqdm(conversations, desc="Parsing conversations"):
+        conversation_data = []
+        for conversation in tqdm(conversations, desc="Loading conversations"):
             conv_id = conversation.get('id')
+            if not conv_id:
+                print("Conversation without an ID found. Skipping.")
+                continue
 
-            # Initialize conversation feature lists
-            conv_features = {
-                # Message content and metadata
-                'messages': [],  # List of actual message texts
-                'authors': [],  # List of message authors
-                'timestamps': [],  # List of message timestamps
-                'response_times': [],  # Time between messages in minutes
-
-                # Conversation-level features
-                'duration_minutes': 0,  # Total conversation duration
-                'num_participants': 0,  # Number of unique participants
-                'num_messages': 0,  # Total number of messages
-                'avg_response_time': 0,  # Average time between messages
-                'time_of_day': 0,  # Hour when conversation started (0-23)
-                'max_msg_per_user': 0,  # Maximum messages from a single user
-                'unique_words': set(),  # Set of unique words used
-                'vocabulary_size': 0,  # Number of unique words
-                'participant_set': set()  # Set of participant IDs
-            }
-
-            conv_features.update(
-                {dim: [] for dim in self.extractor_keys}
-            )
-
-            # Sort messages by line number
             messages = sorted(
                 conversation.findall('message'),
-                key=lambda m: int(m.get('line'))
+                key=lambda m: int(m.get('line', '0'))
             )
 
-            # Process each message
-            prev_time = None
-            user_message_counts = defaultdict(int)
+            conv_features = {
+                'conversation_id': conv_id,
+                'messages': [],
+                'authors': [],
+                'timestamps': [],
+            }
 
             for message in messages:
                 author = message.find('author').text.strip()
-                time = self.parse_time(message.find('time').text.strip())
+                time_str = message.find('time').text.strip()
+                time = self.parse_time(time_str)
                 text = message.find('text').text or ""
 
-                # Update user message counts
-                user_message_counts[author] += 1
-
-                # Calculate message features
-                features = self.calculate_message_features(text)
-
-                # Calculate response time
-                if prev_time:
-                    response_time = (time.hour * 60 + time.minute) - \
-                                    (prev_time.hour * 60 + prev_time.minute)
-                    if response_time < -720:  # More than 12 hours negative
-                        response_time += 1440  # Add 24 hours
-                    conv_features['response_times'].append(response_time)
-                else:
-                    conv_features['response_times'].append(0)
-
-                # Append all features to lists
                 conv_features['messages'].append(text)
                 conv_features['authors'].append(author)
                 conv_features['timestamps'].append(time)
 
-                for dim in self.extractor_keys:
-                    conv_features[dim].append(features[dim])
+            conversation_data.append(conv_features)
 
-                # Update unique words
-                conv_features['unique_words'].update(text.lower().split())
+        return conversation_data
 
-                # Update participant set
-                conv_features['participant_set'].add(author)
+    def create_dataset(self) -> datasets.Dataset:
+        """
+        Creates a HuggingFace Dataset from the loaded conversation data.
 
-                prev_time = time
+        Returns:
+            datasets.Dataset: Dataset containing the conversations.
+        """
+        conversation_data = self.load_conversations()
+        if not conversation_data:
+            raise ValueError("No conversation data loaded.")
 
-                # Update user statistics
-                self.user_stats[author]['message_count'] += 1
-                self.user_stats[author]['conversations'].add(conv_id)
-                self.user_stats[author]['is_attacker'] = author in self.attackers
+        self.dataset = datasets.Dataset.from_list(conversation_data)
+        print(f"Created dataset with {len(self.dataset)} conversations.")
+        return self.dataset
 
-            # Calculate conversation-level features
-            first_msg_time = conv_features['timestamps'][0]
-            last_msg_time = conv_features['timestamps'][-1]
+    def save_to_disk(self, filepath: str) -> None:
+        """
+        Saves the dataset to a directory.
 
-            conv_features['duration_minutes'] = (
-                    (last_msg_time.hour * 60 + last_msg_time.minute) -
-                    (first_msg_time.hour * 60 + first_msg_time.minute)
-            )
-            if conv_features['duration_minutes'] < 0:
-                conv_features['duration_minutes'] += 1440  # Add 24 hours
+        Args:
+            filepath (str): Path to the output directory.
+        """
+        if self.dataset is None:
+            raise ValueError("Dataset is not created yet. Call create_dataset() first.")
 
-            conv_features['num_participants'] = len(conv_features['participant_set'])
-            conv_features['num_messages'] = len(conv_features['messages'])
-            conv_features['avg_response_time'] = np.mean(conv_features['response_times']) if conv_features[
-                'response_times'] else 0
-            conv_features['time_of_day'] = first_msg_time.hour
-            conv_features['max_msg_per_user'] = max(user_message_counts.values())
-            conv_features['vocabulary_size'] = len(conv_features['unique_words'])
+        try:
+            self.dataset.save_to_disk(filepath)
+            print(f"Dataset successfully saved to {filepath}.")
+        except Exception as e:
+            print(f"Failed to save dataset to {filepath}: {e}")
 
-            # Store conversation features
-            self.conversations[conv_id] = conv_features
+    def load_from_disk(self, filepath: str) -> datasets.Dataset:
+        """
+        Loads a dataset from a directory.
 
-    def get_conversation_statistics(self):
-        """Get conversation statistics as a DataFrame."""
-        conv_stats = []
-        for conv_id, features in self.conversations.items():
-            stats = {
-                'conversation_id': conv_id,
-                'num_participants': features['num_participants'],
-                'num_messages': features['num_messages'],
-                'duration_minutes': features['duration_minutes'],
-                'avg_response_time': features['avg_response_time'],
-                'time_of_day': features['time_of_day'],
-                'max_msg_per_user': features['max_msg_per_user'],
-                'vocabulary_size': features['vocabulary_size']
-            }
-            conv_stats.append(stats)
-        return pd.DataFrame(conv_stats)
+        Args:
+            filepath (str): Path to the directory containing the dataset.
 
+        Returns:
+            datasets.Dataset: Loaded dataset.
+        """
+        try:
+            self.dataset = datasets.load_from_disk(filepath)
+            print(f"Loaded dataset from {filepath} with {len(self.dataset)} conversations.")
+            return self.dataset
+        except Exception as e:
+            print(f"Failed to load dataset from {filepath}: {e}")
+            raise e
 
 def main():
-    # Initialize analyzer with file paths
-    directory = 'data'
-    paths = {
-        "xml_path": f"{directory}/pan12-sexual-predator-identification-training-corpus-2012-05-01.xml",
-        "attackers_path": f"{directory}/pan12-sexual-predator-identification-training-corpus-predators-2012-05-01.txt"
-    }
-    analyzer = ConversationAnalyzer(**paths)
-    # Load and parse data
-    analyzer.load_attackers()
-    analyzer.parse_conversations()
-    conversations = analyzer.conversations
-    user_stats = analyzer.user_stats
-    # Save conversation data to JSON
-    with open('conversations.json', 'w') as f:
-        json.dump(conversations, f, default=str)
-    # Save user statistics to JSON
-    with open('user_stats.json', 'w') as f:
-        json.dump(user_stats, f, default=str)
+    """
+    Main function to execute the conversation loading workflow.
+    """
+    # Configuration
+    xml_path = 'data/pan12-sexual-predator-identification-training-corpus-2012-05-01.xml'
+    output_dir = 'data/conversations'
 
-    # Get conversation statistics
-    conv_stats = analyzer.get_conversation_statistics()
-    # Print summary statistics
-    print("\nDataset Statistics:")
-    print(f"Total conversations: {len(analyzer.conversations)}")
-    print(f"Total users: {len(analyzer.user_stats)}")
-    print(f"Total attackers: {sum(1 for _, stats in analyzer.user_stats.items() if stats['is_attacker'])}")
+    # Initialize loader
+    loader = ConversationLoader(xml_path=xml_path, max_conversations=-1)
 
-    # Print conversation statistics summary
-    print("\nConversation Statistics Summary:")
-    print(conv_stats.describe())
-    conv_stats.to_csv('conversation_stats.csv', index=False)
+    # Create dataset
+    loader.create_dataset()
+
+    # Save dataset to JSON
+    loader.save_to_disk(output_dir)
+
+    # Optionally, load the dataset back
+    loaded_dataset = loader.load_from_disk(output_dir)
 
 
 if __name__ == "__main__":

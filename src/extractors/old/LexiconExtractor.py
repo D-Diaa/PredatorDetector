@@ -14,7 +14,7 @@ from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
 from spellchecker import SpellChecker
 
-from src.extractor import FeatureExtractor
+from extractors import FeatureExtractor
 
 # Download required NLTK data
 nltk.download('punkt', quiet=True)

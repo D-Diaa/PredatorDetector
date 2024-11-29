@@ -4,7 +4,7 @@ import string
 from collections import Counter
 from typing import Dict, Any
 
-from src.extractor import FeatureExtractor
+from extractors import FeatureExtractor
 
 
 class LinguisticExtractor(FeatureExtractor):

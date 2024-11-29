@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Set
 
+import torch
+
 
 class FeatureExtractor(ABC):
     """
@@ -17,6 +19,10 @@ class FeatureExtractor(ABC):
             config: Dictionary containing configuration parameters for the extractor
         """
         self._config = config or {}
+        self.device = (self._config.get('device') or
+                       "cuda" if torch.cuda.is_available() else
+                       "mps" if torch.backends.mps.is_available() else
+                       "cpu")
         self._feature_names: Set[str] = set()
 
     @abstractmethod

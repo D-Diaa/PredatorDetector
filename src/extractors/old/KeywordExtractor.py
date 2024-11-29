@@ -1,7 +1,7 @@
 import re
 from typing import Dict, Any
 
-from src.extractor import FeatureExtractor
+from extractors import FeatureExtractor
 
 
 class KeywordExtractor(FeatureExtractor):
