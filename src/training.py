@@ -1,15 +1,11 @@
 import logging
 from datetime import datetime
-from typing import Dict, Tuple
+from typing import Dict
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.metrics import (
-    roc_auc_score, precision_recall_curve,
-    accuracy_score, precision_score, recall_score, f1_score
-)
 from tqdm import tqdm
 
 from dataset import (
@@ -18,112 +14,11 @@ from dataset import (
     create_dataloaders
 )
 from models import SequenceClassifier, ProfileClassifier
-from utils import estimate_pos_weight
+from utils import estimate_pos_weight, calculate_metrics_threshold, evaluate, train_epoch
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def calculate_metrics_threshold(y_true: np.ndarray, y_scores: np.ndarray, threshold=None) -> Tuple[
-    Dict[str, float], float]:
-    """
-    Calculate metrics with optimal threshold selection.
-
-    Args:
-        y_true: True labels
-        y_scores: Predicted probabilities
-        threshold: Threshold for binary classification
-
-    Returns:
-        Dictionary of metrics and optimal threshold
-    """
-    if threshold is None:
-        if len(np.unique(y_true)) > 1:
-            precisions, recalls, thresholds = precision_recall_curve(y_true, y_scores)
-            f1_scores = 2 * (precisions * recalls) / (precisions + recalls + 1e-8)
-            optimal_idx = np.argmax(f1_scores)
-            threshold = thresholds[optimal_idx] if optimal_idx < len(thresholds) else 0.5
-        else:
-            threshold = 0.5
-
-    # Calculate metrics with optimal threshold
-    y_pred = (y_scores >= threshold).astype(int)
-    metrics = {
-        "optimal_threshold": threshold,
-        "accuracy": accuracy_score(y_true, y_pred),
-        "precision": precision_score(y_true, y_pred, zero_division=0),
-        "recall": recall_score(y_true, y_pred, zero_division=0),
-        "f1": f1_score(y_true, y_pred, zero_division=0),
-        "auc": roc_auc_score(y_true, y_scores) if len(np.unique(y_true)) > 1 else 0.5
-    }
-
-    return metrics, threshold
-
-
-def train_epoch(model, train_loader, criterion, optimizer, device):
-    model.train()
-    total_loss = 0
-    predictions, true_labels = [], []
-
-    progress_bar = tqdm(train_loader, desc='Training')
-    for batch_idx, batch in enumerate(progress_bar):
-        sequences = batch['sequence'].to(device)
-        labels = batch['label'].float().to(device)
-
-        optimizer.zero_grad()
-        logits = model(sequences)
-        loss = criterion(logits, labels)
-        if torch.isnan(loss):
-            print(f'NaN loss detected at batch {batch_idx}')
-            return total_loss / len(train_loader), np.array(predictions), np.array(true_labels)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
-
-        total_loss += loss.item()
-        predictions.extend(torch.sigmoid(logits).cpu().detach().numpy())
-        true_labels.extend(labels.cpu().numpy())
-
-        # Calculate metrics with current threshold
-        batch_metrics = calculate_metrics_threshold(
-            np.array(true_labels[-len(labels):]),
-            np.array(predictions[-len(labels):])
-        )[0]
-
-        progress_bar.set_postfix({
-            'loss': f'{loss.item():.4f}',
-            'f1': f'{batch_metrics["f1"]:.4f}'
-        })
-
-    return total_loss / len(train_loader), np.array(predictions), np.array(true_labels)
-
-
-def evaluate(model, data_loader, criterion, device, threshold=None):
-    model.eval()
-    total_loss = 0
-    predictions, true_labels = [], []
-
-    with torch.no_grad():
-        for batch in data_loader:
-            sequences = batch['sequence'].to(device)
-            labels = batch['label'].float().to(device)
-
-            logits = model(sequences)
-            loss = criterion(logits, labels)
-
-            total_loss += loss.item()
-            predictions.extend(torch.sigmoid(logits).cpu().numpy())
-            true_labels.extend(labels.cpu().numpy())
-
-    # Calculate metrics with optimal threshold
-    metrics, new_threshold = calculate_metrics_threshold(
-        np.array(true_labels),
-        np.array(predictions),
-        threshold
-    )
-
-    return total_loss / len(data_loader), predictions, true_labels, metrics, new_threshold
 
 
 def test_model(model_type, model_path, dataset_path, device='cuda', seed=42):
@@ -133,9 +28,9 @@ def test_model(model_type, model_path, dataset_path, device='cuda', seed=42):
 
     # Create dataset
     if model_type == 'conversation':
-        dataset = ConversationSequenceDataset(dataset_path, max_seq_length=256, min_seq_length=10)
+        dataset = ConversationSequenceDataset(dataset_path, max_seq_length=256, min_seq_length=8)
     elif model_type == 'author':
-        dataset = AuthorConversationSequenceDataset(dataset_path, max_seq_length=128, min_seq_length=5)
+        dataset = AuthorConversationSequenceDataset(dataset_path, max_seq_length=256, min_seq_length=8)
     else:
         raise ValueError(f'Invalid model type: {model_type}')
     # Create dataloaders
@@ -186,9 +81,9 @@ def train_model(model_type='conversation',
 
     # Create dataset
     if model_type == 'conversation':
-        dataset = ConversationSequenceDataset(dataset_path, max_seq_length=256, min_seq_length=10)
+        dataset = ConversationSequenceDataset(dataset_path, max_seq_length=256, min_seq_length=8)
     elif model_type == 'author':
-        dataset = AuthorConversationSequenceDataset(dataset_path, max_seq_length=128, min_seq_length=5)
+        dataset = AuthorConversationSequenceDataset(dataset_path, max_seq_length=256, min_seq_length=8)
     else:
         raise ValueError(f'Invalid model type: {model_type}')
 
@@ -289,8 +184,8 @@ def evaluate_profile_classifier(
     # Create profile dataset
     profile_dataset = AuthorConversationSequenceDataset(
         dataset_path=dataset_path,
-        max_seq_length=128,
-        min_seq_length=5
+        max_seq_length=256,
+        min_seq_length=8
     )
     authors = profile_dataset.get_authors()
 
@@ -362,8 +257,8 @@ def compare_aggregation_methods(
 
 
 def eval_main(
-        conversation_model_path='models/conversation_classifier_20241129_004257.pt',
-        author_model_path='models/author_classifier_20241129_013216.pt'
+        conversation_model_path='models/conversation_classifier_20241129_041816.pt',
+        author_model_path='models/author_classifier_20241129_042403.pt'
 ):
     # Evaluate conversation classifier
     logger.info('Evaluating Conversation Classifier...')
@@ -393,3 +288,4 @@ def train_main():
 
 if __name__ == '__main__':
     eval_main()
+    # train_main()
