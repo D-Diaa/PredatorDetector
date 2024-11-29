@@ -4,6 +4,7 @@ import numpy as np
 import seaborn as sns
 import torch
 import torch.nn as nn
+from numpy import floating
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from utils import calculate_metrics_threshold
@@ -56,6 +57,67 @@ def compute_shap_values(
 
     return shap_values
 
+
+def compute_permutation_importance(
+        dataloader: DataLoader,
+        model: nn.Module,
+        device: str,
+        feature_names: List[str],
+        metric_fn: Callable[[List[Any], List[Any]], float],
+        n_repeats: int = 5,
+) -> dict[str, floating[Any]]:
+    # Cache all data
+    all_inputs = []
+    all_labels = []
+    with torch.no_grad():
+        for batch in dataloader:
+            inputs = batch["sequence"].to(device)
+            labels = batch["label"]
+            all_inputs.append(inputs)
+            all_labels.append(labels)
+
+    # Compute baseline metric
+    baseline_outputs = []
+    baseline_labels = []
+    with torch.no_grad():
+        for inputs, labels in zip(all_inputs, all_labels):
+            outputs = model(inputs)
+            baseline_outputs.extend(outputs.cpu().numpy().tolist())
+            baseline_labels.extend(labels.cpu().numpy().tolist())
+    baseline_metric = metric_fn(baseline_labels, baseline_outputs)
+
+    # Compute importance for each feature
+    importance_scores = {}
+
+    for feature_idx, feature_name in tqdm(enumerate(feature_names), total=len(feature_names)):
+        feature_scores = []
+
+        for _ in range(n_repeats):
+            permuted_outputs = []
+            permuted_labels = []
+
+            with torch.no_grad():
+                for inputs, labels in zip(all_inputs, all_labels):
+                    # Create copy of inputs and permute specific feature
+                    permuted_inputs = inputs.clone()
+
+                    # Permute along sequence dimension for the specific feature
+                    perm_idx = torch.randperm(inputs.size(1))
+                    permuted_inputs[:, :, feature_idx] = inputs[:, perm_idx, feature_idx]
+
+                    outputs = model(permuted_inputs)
+                    permuted_outputs.extend(outputs.cpu().numpy().tolist())
+                    permuted_labels.extend(labels.cpu().numpy().tolist())
+
+            # Compute metric drop
+            permuted_metric = metric_fn(permuted_labels, permuted_outputs)
+            importance = baseline_metric - permuted_metric
+            feature_scores.append(importance)
+
+        # Store mean and std of importance scores
+        importance_scores[feature_name] = np.mean(feature_scores)
+
+    return importance_scores
 
 def compute_gradient_saliency(
         inputs: torch.Tensor,
@@ -369,6 +431,17 @@ def analyze_feature_importance(
     shap_scores = dict(zip(feature_names, avg_shap_importance))
     results['shap'] = shap_scores
 
+    # 6. Permutation Importance
+    print("Computing permutation importance...")
+    permutation_scores = compute_permutation_importance(
+        test_loader,
+        model,
+        device,
+        feature_names,
+        f1_score
+    )
+    results['permutation'] = permutation_scores
+
     # 7. Gradient Saliency
     print("Computing gradient saliency...")
     saliency_scores = compute_gradient_saliency(
@@ -399,7 +472,7 @@ def visualize_all_results(
     os.makedirs(output_dir, exist_ok=True)
 
     # 1. Feature Importance Comparison
-    methods = ['ablation', 'integrated_gradients', 'attention', 'shap', 'saliency']
+    methods = ['ablation', 'integrated_gradients', 'attention', 'shap', 'saliency', 'permutation']
 
     for method in methods:
         if method in results:
@@ -453,7 +526,7 @@ def main():
         'conversation': 'models/conversation_classifier_20241129_041816.pt',
         'author': 'models/author_classifier_20241129_042403.pt'
     }
-    model_type = 'author'
+    model_type = 'conversation'
     dataset_path = 'data/analyzed_conversations'
 
     print("Analyzing feature importance...")
