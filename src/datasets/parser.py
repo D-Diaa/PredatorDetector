@@ -6,7 +6,7 @@ import datasets
 from tqdm import tqdm
 
 
-class ConversationLoader:
+class ConversationParser:
     """
     Loads and parses XML conversation files into a HuggingFace datasets.Dataset.
     """
@@ -153,7 +153,7 @@ def main():
     output_dir = 'data/conversations'
 
     # Initialize loader
-    loader = ConversationLoader(xml_path=xml_path, max_conversations=-1)
+    loader = ConversationParser(xml_path=xml_path, max_conversations=-1)
 
     # Create dataset
     loader.create_dataset()

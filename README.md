@@ -1,260 +1,250 @@
-# Cyber-Predator Detection System
+# Conversation Analysis Framework
+
+A comprehensive Python framework for analyzing conversations, detecting problematic interactions, and building interpretable ML models for conversation and author-level classification.
 
 ## Overview
-This project implements a machine learning system for detecting potential cyber-predators in online conversations using a multi-dimensional approach combining EPA (Evaluation, Potency, Activity) sequences with transformer-based models for emotional and behavioral pattern analysis. The system processes chat logs through multiple feature extractors to identify suspicious behavioral patterns and temporal dynamics that may indicate predatory behavior.
 
-## Architecture
+This project provides an end-to-end solution for conversation analysis through four integrated packages:
 
-### Core Components and Data Flow
+1. **Extractors**: Feature extraction using state-of-the-art transformer models
+2. **Datasets**: Efficient dataset creation and processing for conversation analysis
+3. **Training**: PyTorch-based model training and evaluation
+4. **Visualization**: Comprehensive tools for result analysis and model interpretability
 
-1. **Data Processing Pipeline**
-   - `parser.py`: 
-     - XML chat log parsing using ElementTree
-     - Conversation structuring with author, timestamp, and message tracking
-     - Dataset creation using HuggingFace datasets format
-     - Memory-efficient data loading with batch processing
+## Core Components
 
-2. **Analysis Pipeline**
-   - `analyzer.py`:
-     - ConversationAnalyzer class for streaming analysis
-     - Feature extraction orchestration
-     - Memory-efficient processing using map function
-     - Attacker identification and tracking
+### 1. Extractors Package
+The `extractors` package provides a comprehensive suite of feature extractors using state-of-the-art transformer models:
 
-3. **Dataset Management**
-   - `dataset.py`:
-     - BaseDataset with caching and normalization
-     - ConversationSequenceDataset for conversation-level analysis
-     - AuthorConversationSequenceDataset for author-level analysis
-     - Custom data loaders with stratified sampling
+- **SentimentExtractor**: Uses RoBERTa for advanced sentiment analysis (positive, negative, neutral) with confidence scores
+- **EmotionExtractor**: Detects multiple emotions (happiness, sadness, anger, fear, surprise, disgust) with intensity scores
+- **ToxicityExtractor**: Identifies various forms of toxic content (severe toxicity, obscenity, threats, insults, identity attacks)
+- **IntentExtractor**: Recognizes conversation intents including trust building, manipulation, isolation attempts
+- **Word2AffectExtractor**: Extracts psycholinguistic features like valence, arousal, dominance
 
-4. **Model Architectures**
-   - `models.py`:
-     - Transformer Encoder:
-       - Multi-head self-attention mechanism
-       - Positional encoding for sequence order
-       - Layer normalization and residual connections
-     
-     - Sequence Classifier:
-       - Input projection layer
-       - Multi-scale feature aggregation using Conv1d
-       - Multiple kernel sizes (3, 5, 7) for pattern detection
-       - Residual blocks with dropout
-       
-     - Profile Classifier:
-       - Pretrained sequence classifier integration
-       - Multiple aggregation methods (mean, median, vote)
-       - Confidence thresholding
-     
-     - Initialization:
-       - Xavier/Glorot for linear layers
-       - Kaiming/He for convolutional layers
-       - Scaled initialization for attention layers
+All extractors support:
+- Batch processing with GPU acceleration
+- Automatic text chunking for long sequences
+- Memory-efficient processing
+- Built-in error handling
 
-5. **Training and Evaluation**
-   - `training.py`:
-     - Training loops with gradient clipping
-     - Multi-stage evaluation pipeline
-     - Metrics calculation with optimal thresholding
-     - Model selection based on F1 score
-     - Learning rate scheduling
+### 2. Datasets Package
+The `datasets` package handles dataset creation and processing with:
+- **ConversationParser**: Efficient XML parsing and dataset creation
+- **ConversationAnalyzer**: Multi-feature extraction and analysis pipeline
+- **ConversationSequenceDataset**: Conversation-level sequence handling
+- **AuthorConversationSequenceDataset**: Author-level sequence analysis
+- Built-in caching and memory-mapped file support
+- Integration with HuggingFace's datasets library
 
-6. **Utilities**
-   - `utils.py`:
-     - Class weight estimation methods
-     - Performance metric calculations
-     - Model selection utilities
+### 3. Training Package
+The `training` package provides PyTorch-based model training with:
+- **SequenceClassifier**: Transformer-based model with multi-scale feature extraction
+- **ProfileClassifier**: Author profile classification with multiple aggregation strategies
+- Advanced training features like class imbalance handling and dynamic thresholding
+- Comprehensive metrics tracking and model checkpointing
+- Flexible model architecture with customizable hyperparameters
+
+### 4. Visualization Package
+The `visualization` package offers comprehensive analysis tools:
+- **Dataset Analysis**: Feature correlation, distribution statistics, temporal patterns
+- **Sequential Analysis**: Temporal autocorrelation, cross-feature correlations, trajectory analysis
+- **Feature Importance**: Multiple interpretability methods (SHAP, Integrated Gradients, etc.)
+- **Visualization Functions**: Comprehensive plotting utilities for all analyses
+- Automated report generation and result visualization
 
 ## Features
 
-### Feature Extractors
+### Feature Extraction
+- Sentiment analysis using RoBERTa
+- Emotion detection with GoEmotions
+- Toxicity measurement across multiple dimensions
+- Intent classification using zero-shot learning
+- Word affect analysis for psycholinguistic features
+- GPU-accelerated batch processing
 
-1. **Word2Affect Features**
-   - Valence: Emotional positivity/negativity
-   - Arousal: Level of energy/intensity
-   - Dominance: Degree of control/power
-   - Age of Acquisition: Developmental timing of word learning
-   - Concreteness: Degree of tangibility/abstractness
+### Dataset Processing
+- Memory-efficient handling of large conversation datasets
+- Automatic feature extraction and caching
+- Support for both conversation and author-level analysis
+- Flexible sequence length handling
+- Weighted sampling for imbalanced datasets
+- Integration with HuggingFace's datasets library
 
-2. **Toxicity Analysis**
-   - General toxicity
-   - Severe toxicity
-   - Obscenity detection
-   - Threat detection
-   - Insult detection
-   - Identity-based attacks
+### Model Training
+- Transformer-based sequence encoding
+- Multi-scale feature extraction
+- Advanced class imbalance handling
+- Profile-level aggregation strategies
+- Comprehensive metrics tracking
+- Automated model checkpointing
 
-3. **Sentiment Analysis (RoBERTa-based)**
-   - Positive sentiment
-   - Neutral sentiment
-   - Negative sentiment
-   - Sentiment confidence scores
-
-4. **Emotion Detection (GoEmotions)**
-   - Basic emotions (happy, sad, angry, etc.)
-   - Emotion intensity
-   - Temporal emotional patterns
-   - Emotional transitions
-
-5. **Intent Classification (BART Zero-Shot)**
-   - Trust building detection
-   - Isolation attempt identification
-   - Boundary testing patterns
-   - Personal probing detection
-   - Manipulation tactics
-   - Secrecy pressure
-   - Authority undermining
-   - Reward offering
-   - Normalization attempts
-   - Meeting planning indicators
-
-### System Features
-
-1. **Data Processing**
-   - Automatic XML parsing and structuring
-   - Memory-mapped dataset handling
-   - Efficient batch processing
-   - Automatic caching with smart invalidation
-   - Text cleaning and normalization
-
-2. **Performance Optimization**
-   - GPU acceleration for all extractors
-   - Vectorized operations for feature processing
-   - Memory-efficient streaming analysis
-   - Smart batching for transformer models
-   - Automatic sequence length optimization
-
-3. **Analysis Capabilities**
-   - Conversation-level pattern detection
-   - Author-level behavioral profiling
-   - Temporal sequence analysis
-   - Multi-scale feature aggregation
-   - Cross-conversation user tracking
-
-## Requirements
-
-```
-torch>=2.0.0
-transformers>=4.30.0
-datasets>=2.12.0
-numpy>=1.24.0
-pandas>=2.0.0
-scikit-learn>=1.2.0
-tqdm>=4.65.0
-detoxify>=0.5.0
-```
+### Visualization and Interpretability
+- Dataset feature analysis and visualization
+- Sequential pattern analysis
+- Multiple feature importance methods:
+  - SHAP (SHapley Additive exPlanations)
+  - Integrated Gradients
+  - Attention Attribution
+  - Feature Ablation
+  - Permutation Importance
+- Temporal correlation analysis
 
 ## Installation
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/username/cyber-predator-detection.git
-cd cyber-predator-detection
+pip install torch  # Install appropriate version for your system
+pip install transformers detoxify
+git clone https://huggingface.co/hplisiecki/word2affect_english  # Required for Word2Affect features
 ```
 
-2. Create and activate a virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+## Quick Start
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+### 1. Feature Extraction
 
-## Usage
-
-The system follows a pipeline architecture with four main stages:
-
-### 1. Data Preparation (parser.py)
 ```python
-# Initialize the conversation loader
-loader = ConversationLoader(
-    xml_path='data/pan12-sexual-predator-identification-training-corpus-2012-05-01.xml',
-    max_conversations=-1  # Load all conversations
-)
+from extractors import SentimentExtractor, EmotionExtractor, ToxicityExtractor
 
-# Create and save the dataset
-dataset = loader.create_dataset()
-loader.save_to_disk('data/conversations')
+# Initialize extractors
+sentiment = SentimentExtractor()
+emotion = EmotionExtractor()
+toxicity = ToxicityExtractor()
+
+# Extract features
+text = "Your message here"
+sentiment_scores = sentiment.extract(text)
+emotion_scores = emotion.extract(text)
+toxicity_scores = toxicity.extract(text)
 ```
 
-### 2. Feature Extraction (analyzer.py)
+### 2. Dataset Creation
+
 ```python
-# Initialize the analyzer with GPU support
+from datasets import ConversationParser, ConversationAnalyzer
+
+# Parse and analyze conversations
+parser = ConversationParser('conversations.xml')
 analyzer = ConversationAnalyzer(batch_size=16)
 
-# Load known attackers list
-analyzer.load_attackers('data/pan12-sexual-predator-identification-training-corpus-predators-2012-05-01.txt')
-
-# Process conversations and extract features
-dataset = datasets.load_from_disk('data/conversations')
-analyzed_dataset = analyzer.process_dataset(dataset)
-analyzed_dataset.save_to_disk('data/analyzed_conversations')
+# Create dataset
+raw_dataset = parser.create_dataset()
+analyzed_dataset = analyzer.process_dataset(raw_dataset)
 ```
 
-### 3. Dataset Creation (dataset.py)
+### 3. Model Training
+
 ```python
-# Create conversation-level dataset
-conv_dataset = ConversationSequenceDataset(
-    dataset_path='data/analyzed_conversations',
-    max_seq_length=256,
-    min_seq_length=10
-)
+from training import train_model, test_model
 
-# Create author-level dataset
-author_dataset = AuthorConversationSequenceDataset(
-    dataset_path='data/analyzed_conversations',
-    max_seq_length=128,
-    min_seq_length=5
-)
-
-# Create data loaders
-train_loader, val_loader, test_loader = create_dataloaders(
-    dataset=conv_dataset,
-    batch_size=256,
-    train_split=0.8,
-    val_split=0.1
-)
-```
-
-### 4. Training and Evaluation (training.py)
-
-#### Training Models
-```python
-# Train conversation classifier
+# Train models
 conv_model_path = train_model(
     model_type='conversation',
-    dataset_path='data/analyzed_conversations',
-    num_epochs=50,
-    batch_size=256,
-    learning_rate=1e-4
+    dataset_path='analyzed_conversations',
+    num_epochs=50
 )
 
-# Train author classifier
-author_model_path = train_model(
-    model_type='author',
-    dataset_path='data/analyzed_conversations',
-    num_epochs=75,
-    batch_size=256,
-    learning_rate=1e-4
-)
-```
-
-#### Evaluation
-```python
-# Evaluate models
-test_metrics = test_model(
+# Evaluate
+metrics = test_model(
     model_type='conversation',
-    model_path='models/conversation_classifier.pt',
-    dataset_path='data/analyzed_conversations'
-)
-
-# Profile-level evaluation
-profile_metrics = evaluate_profile_classifier(
-    author_model_path='models/author_classifier.pt',
-    dataset_path='data/analyzed_conversations',
-    aggregation='mean'
+    model_path=conv_model_path,
+    dataset_path='analyzed_conversations'
 )
 ```
+
+### 4. Visualization
+
+```python
+from visualization import (
+    analyze_dataset_features,
+    analyze_sequential_features,
+    analyze_feature_importance
+)
+
+# Analyze and visualize results
+dataset_results = analyze_dataset_features(
+    dataloader=train_loader,
+    feature_names=dataset.feature_keys
+)
+
+visualize_all_results(dataset_results)
+```
+
+## System Architecture
+
+### Main Pipeline
+```
+Raw Conversations → Feature Extraction → Dataset Creation → Model Training → Visualization
+     ↓                     ↓                    ↓                 ↓              ↓
+   XML/Text        Sentiment/Emotion     Sequence Dataset    Training Loop    Analysis Plots
+   Format          Toxicity/Intent       Author Dataset      Evaluation      Feature Importance
+                   Word Affect           Cache System        Checkpoints     Interpretability
+```
+
+### Feature Processing Pipeline
+```
+Input Text → Extractors Pipeline → Feature Vector
+    ↓              ↓                    ↓
+Cleaning    Sentiment Analysis    Feature Fusion
+Batching    Emotion Detection    Normalization
+Chunking    Toxicity Analysis    Validation
+            Intent Classification
+            Word Affect Analysis
+```
+
+### Training Pipeline
+```
+Dataset → Data Processing → Model Architecture → Training Loop → Evaluation
+   ↓            ↓                    ↓                ↓            ↓
+XML Data    Normalization    Transformer Encoder    Forward     Metrics
+Parsing     Sequencing      Feature Extraction     Backward    Threshold
+Features    Batching        Classification Head    Updates     Validation
+```
+
+### Analysis Pipeline
+```
+Model Output → Feature Analysis → Visualization → Interpretation
+     ↓               ↓                  ↓              ↓
+Predictions    SHAP Values         Distribution    Feature
+Sequences      Gradient Analysis    Correlation    Importance
+Profiles       Ablation Studies     Temporal       Explanation
+               Permutation Tests    Patterns       Insights
+```
+
+## Best Practices
+
+### Data Processing
+- Clean and preprocess input features
+- Handle missing values appropriately
+- Use batch processing for large datasets
+- Enable GPU acceleration when available
+- Implement proper caching strategies
+
+### Model Training
+- Start with default hyperparameters
+- Monitor for overfitting
+- Use appropriate batch sizes
+- Save checkpoints regularly
+- Validate with multiple metrics
+
+### Analysis
+- Examine feature distributions
+- Consider temporal patterns
+- Use multiple interpretability methods
+- Validate results across different approaches
+
+## Error Handling
+
+All packages include comprehensive error handling:
+- Input validation
+- NaN/Inf checking
+- Sequence length validation
+- Feature compatibility verification
+- Graceful failure handling
+
+## Performance Optimization
+
+- GPU acceleration for feature extraction
+- Memory-mapped file loading
+- Efficient caching system
+- Vectorized operations
+- Batch processing
