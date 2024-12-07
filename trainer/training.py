@@ -1,4 +1,6 @@
+import json
 import logging
+import os
 from datetime import datetime
 from typing import Dict
 
@@ -8,13 +10,14 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 
-from dataset import (
+from datahandler import (
     ConversationSequenceDataset,
     AuthorConversationSequenceDataset,
     create_dataloaders
 )
-from models import SequenceClassifier, ProfileClassifier
-from utils import estimate_pos_weight, calculate_metrics_threshold, evaluate, train_epoch
+from extractors import feature_sets
+from trainer.models import SequenceClassifier, ProfileClassifier
+from trainer.utils import estimate_pos_weight, calculate_metrics_threshold, evaluate, train_epoch
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -67,6 +70,8 @@ def test_model(model_type, model_path, dataset_path, device='cuda', seed=42):
 
 def train_model(model_type='conversation',
                 dataset_path='data/analyzed_conversations',
+                feature_set='models',
+                feature_keys=None,
                 num_epochs=50,
                 batch_size=256,
                 learning_rate=1e-4,
@@ -78,12 +83,15 @@ def train_model(model_type='conversation',
     # Set random seeds
     torch.manual_seed(seed)
     np.random.seed(seed)
-
+    directory = os.path.join('models', feature_set, model_type)
+    os.makedirs(directory, exist_ok=True)
     # Create dataset
     if model_type == 'conversation':
-        dataset = ConversationSequenceDataset(dataset_path, max_seq_length=256, min_seq_length=8)
+        dataset = ConversationSequenceDataset(dataset_path, max_seq_length=256, min_seq_length=8,
+                                              feature_keys=feature_keys)
     elif model_type == 'author':
-        dataset = AuthorConversationSequenceDataset(dataset_path, max_seq_length=256, min_seq_length=8)
+        dataset = AuthorConversationSequenceDataset(dataset_path, max_seq_length=256, min_seq_length=8,
+                                                    feature_keys=feature_keys)
     else:
         raise ValueError(f'Invalid model type: {model_type}')
 
@@ -113,7 +121,7 @@ def train_model(model_type='conversation',
     # Training loop
     best_val_f1 = 0
     best_threshold = 0.5
-    best_model_path = f'models/{model_type}_classifier_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pt'
+    best_model_path = f'{directory}/classifier_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pt'
 
     for epoch in range(num_epochs):
         # Train
@@ -160,6 +168,8 @@ def train_model(model_type='conversation',
     logger.info(f'Metrics with optimal threshold {best_threshold:.4f}:')
     for metric, value in test_metrics.items():
         logger.info(f'{metric}: {value:.4f}')
+    with open(f"{directory}/test_results.json", "w") as f:
+        json.dump(test_metrics, f)
     return best_model_path
 
 
@@ -275,17 +285,33 @@ def eval_main(
     )
 
 
-def train_main():
+def train_main(feature_keys, feature_set_key):
     # Train conversation classifier
     logger.info('Training Conversation Classifier...')
-    conv_model_path = train_model(model_type='conversation', num_epochs=50, batch_size=256, learning_rate=1e-4)
+    conv_model_path = train_model(
+        model_type='conversation',
+        feature_set=feature_set_key,
+        feature_keys=feature_keys,
+        num_epochs=100,
+        batch_size=256,
+        learning_rate=1e-4
+    )
     print(f"Conversation model path: {conv_model_path}")
     # # Train author classifier
     logger.info('\nTraining Author Classifier...')
-    author_model_path = train_model(model_type='author', num_epochs=75, batch_size=256, learning_rate=1e-4)
+    author_model_path = train_model(
+        model_type='author',
+        feature_set=feature_set_key,
+        feature_keys=feature_keys,
+        num_epochs=100,
+        batch_size=256,
+        learning_rate=1e-4
+    )
     print(f"Author model path: {author_model_path}")
 
 
 if __name__ == '__main__':
-    eval_main()
-    # train_main()
+    # for set_key in feature_sets.keys():
+    set_key = "best"
+    feature_keys = [f"feat_{feat}" for feat in feature_sets[set_key]]
+    train_main(feature_keys, set_key)

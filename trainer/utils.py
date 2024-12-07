@@ -74,6 +74,7 @@ def evaluate(model, data_loader, criterion, device, threshold=None):
 
     return total_loss / len(data_loader), predictions, true_labels, metrics, new_threshold
 
+
 def calculate_metrics_threshold(y_true: np.ndarray, y_scores: np.ndarray, threshold=None) -> Tuple[
     Dict[str, float], float]:
     """
@@ -99,15 +100,16 @@ def calculate_metrics_threshold(y_true: np.ndarray, y_scores: np.ndarray, thresh
     # Calculate metrics with optimal threshold
     y_pred = (y_scores >= threshold).astype(int)
     metrics = {
-        "optimal_threshold": threshold,
-        "accuracy": accuracy_score(y_true, y_pred),
-        "precision": precision_score(y_true, y_pred, zero_division=0),
-        "recall": recall_score(y_true, y_pred, zero_division=0),
-        "f1": f1_score(y_true, y_pred, zero_division=0),
-        "auc": roc_auc_score(y_true, y_scores) if len(np.unique(y_true)) > 1 else 0.5
+        "optimal_threshold": float(threshold),
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "precision": float(precision_score(y_true, y_pred, zero_division=0)),
+        "recall": float(recall_score(y_true, y_pred, zero_division=0)),
+        "f1": float(f1_score(y_true, y_pred, zero_division=0)),
+        "auc": float(roc_auc_score(y_true, y_scores)) if len(np.unique(y_true)) > 1 else 0.5
     }
 
     return metrics, threshold
+
 
 def estimate_pos_weight(labels: np.ndarray, method: str = 'balanced') -> float:
     """

@@ -8,11 +8,13 @@ from scipy import stats
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from dataset import (
+from datahandler import (
     ConversationSequenceDataset,
     AuthorConversationSequenceDataset,
     create_dataloaders, BaseDataset
 )
+
+from extractors import feature_sets
 
 
 def temporal_correlation_analysis(
@@ -432,34 +434,21 @@ def analyze_dataset_features(
     return results
 
 
-def main() -> None:
-    """
-    Main function to execute dataset analysis and sequential feature analysis.
-
-    This function performs the following steps:
-    1. Loads the dataset based on the specified model type.
-    2. Creates data loaders for training, validation, and testing.
-    3. Performs dataset-level feature analysis.
-    4. Identifies top features with the most significant differences between classes.
-    5. Performs sequential dataset analysis.
-    6. Identifies top features with strong temporal autocorrelation and distinct temporal patterns.
-
-    Returns:
-        None
-    """
-    model_type: str = 'conversation'
+def main(model_type, feature_set, feature_keys) -> None:
     dataset_path: str = 'data/analyzed_conversations'
 
     # Load dataset
     if model_type == 'conversation':
         dataset: BaseDataset = ConversationSequenceDataset(
             dataset_path=dataset_path,
+            feature_keys=feature_keys,
             max_seq_length=256,
             min_seq_length=8
         )
     else:
         dataset = AuthorConversationSequenceDataset(
             dataset_path,
+            feature_keys=feature_keys,
             max_seq_length=256,
             min_seq_length=8
         )
@@ -477,7 +466,7 @@ def main() -> None:
     dataset_results: Dict[str, Any] = analyze_dataset_features(
         train_loader,
         dataset.feature_keys,
-        output_dir='dataset_analysis'
+        output_dir=f'dataset_analysis/{feature_set}/{model_type}'
     )
 
     # Print some key findings from dataset analysis
@@ -497,7 +486,7 @@ def main() -> None:
     results: Dict[str, Any] = analyze_sequential_features(
         test_loader,
         dataset.feature_keys,
-        output_dir='sequential_analysis'
+        output_dir=f'sequence_analysis/{feature_set}/{model_type}'
     )
 
     # Print key findings
@@ -525,4 +514,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    for set_key in feature_sets.keys():
+        feature_keys = [f"feat_{feat}" for feat in feature_sets[set_key]]
+        for model_type in ['conversation', 'author']:
+            main(model_type, set_key, feature_keys)

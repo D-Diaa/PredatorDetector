@@ -1,3 +1,5 @@
+import json
+import os
 from typing import List, Callable, Dict, Tuple, Optional, Any
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,14 +9,16 @@ import torch.nn as nn
 from numpy import floating
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from utils import calculate_metrics_threshold
 
-from dataset import (
+from extractors import feature_sets
+from trainer.utils import calculate_metrics_threshold
+
+from datahandler import (
     ConversationSequenceDataset,
     create_dataloaders,
-    AuthorConversationSequenceDataset
+    AuthorConversationSequenceDataset, BaseDataset
 )
-from models import SequenceClassifier
+from trainer.models import SequenceClassifier
 
 
 def compute_shap_values(
@@ -83,7 +87,7 @@ def compute_permutation_importance(
         feature_names: List[str],
         metric_fn: Callable[[List[Any], List[Any]], float],
         n_repeats: int = 5,
-) -> Dict[str, floating]:
+) -> Dict[str, float]:
     """
     Compute permutation importance for each feature based on a specified metric.
 
@@ -147,7 +151,7 @@ def compute_permutation_importance(
             feature_scores.append(importance)
 
         # Store mean importance score for the feature
-        importance_scores[feature_name] = np.mean(feature_scores)
+        importance_scores[feature_name] = float(np.mean(feature_scores))
 
     return importance_scores
 
@@ -422,6 +426,7 @@ def analyze_feature_importance(
         model_type: str,
         model_path: str,
         dataset_path: str,
+        feature_keys: List[str],
         device: str = 'cuda',
         batch_size: int = 64
 ) -> Dict[str, Dict[str, float]]:
@@ -440,14 +445,16 @@ def analyze_feature_importance(
     """
     # Load dataset
     if model_type == 'conversation':
-        dataset: ConversationSequenceDataset = ConversationSequenceDataset(
+        dataset: BaseDataset = ConversationSequenceDataset(
             dataset_path=dataset_path,
+            feature_keys=feature_keys,
             max_seq_length=256,
             min_seq_length=8
         )
     else:
         dataset = AuthorConversationSequenceDataset(
             dataset_path=dataset_path,
+            feature_keys=feature_keys,
             max_seq_length=256,
             min_seq_length=8
         )
@@ -500,7 +507,7 @@ def analyze_feature_importance(
     )
 
     # Average attributions across sequence length and batch
-    avg_ig_importance: np.ndarray = ig_attributions.abs().mean(dim=(0, 1)).cpu().numpy()
+    avg_ig_importance: np.ndarray = ig_attributions.abs().mean(dim=(0, 1)).cpu().numpy().tolist()
     ig_scores: Dict[str, float] = dict(zip(feature_names, avg_ig_importance))
     results['integrated_gradients'] = ig_scores
 
@@ -511,7 +518,7 @@ def analyze_feature_importance(
     attn_weights, attn_attribution = compute_attention_attribution(sample_inputs, model)
 
     # Average attention attribution across sequence length and batch
-    avg_attn_importance: np.ndarray = attn_attribution.abs().mean(dim=(0, 1)).cpu().numpy()
+    avg_attn_importance: np.ndarray = attn_attribution.abs().mean(dim=(0, 1)).cpu().numpy().tolist()
     attention_scores: Dict[str, float] = dict(zip(feature_names, avg_attn_importance))
     results['attention'] = attention_scores
 
@@ -527,7 +534,7 @@ def analyze_feature_importance(
         model,
         num_samples=100
     )
-    avg_shap_importance: np.ndarray = shap_attributions.abs().mean(dim=(0, 1)).cpu().numpy()
+    avg_shap_importance: np.ndarray = shap_attributions.abs().mean(dim=(0, 1)).cpu().numpy().tolist()
     shap_scores: Dict[str, float] = dict(zip(feature_names, avg_shap_importance))
     results['shap'] = shap_scores
 
@@ -550,7 +557,7 @@ def analyze_feature_importance(
         smooth_samples=50,
         noise_scale=0.1
     )
-    avg_saliency_importance: np.ndarray = saliency_scores.abs().mean(dim=(0, 1)).cpu().numpy()
+    avg_saliency_importance: np.ndarray = saliency_scores.abs().mean(dim=(0, 1)).cpu().numpy().tolist()
     saliency_scores_dict: Dict[str, float] = dict(zip(feature_names, avg_saliency_importance))
     results['saliency'] = saliency_scores_dict
 
@@ -625,52 +632,33 @@ def visualize_all_results(
 
 
 def main() -> None:
-    """
-    Main function to execute feature importance analysis and visualization.
-
-    This function performs the following steps:
-    1. Loads the dataset based on the specified model type.
-    2. Creates data loaders for training, validation, and testing.
-    3. Loads the trained model.
-    4. Performs feature importance analysis using multiple methods.
-    5. Creates visualizations for the analysis results.
-    6. Prints the top 10 most important features for each analysis method.
-
-    Returns:
-        None
-    """
     # Define model paths
-    model_paths: Dict[str, str] = {
-        'conversation': 'models/conversation_classifier_20241129_041816.pt',
-        'author': 'models/author_classifier_20241129_042403.pt'
-    }
-    model_type: str = 'conversation'  # Choose between 'conversation' or 'author'
-    dataset_path: str = 'data/analyzed_conversations'
+    models_dir = 'models'
+    for feature_set in os.listdir(models_dir):
+        if feature_set != 'all':
+            continue
+        feature_dir = os.path.join(models_dir, feature_set)
+        for model_type in os.listdir(feature_dir):
+            model_file = [file for file in os.listdir(os.path.join(feature_dir, model_type)) if file.endswith('.pt')][0]
+            model_path = os.path.join(feature_dir, model_type, model_file)
+            dataset_path: str = 'data/analyzed_conversations'
+            feature_keys = [f"feat_{feat}" for feat in feature_sets[feature_set]]
+            print("Analyzing feature importance...")
+            results: Dict[str, Dict[str, float]] = analyze_feature_importance(
+                model_type=model_type,
+                model_path=model_path,
+                feature_keys=feature_keys,
+                dataset_path=dataset_path,
+                device='cuda',
+                batch_size=64
+            )
 
-    print("Analyzing feature importance...")
-    results: Dict[str, Dict[str, float]] = analyze_feature_importance(
-        model_type=model_type,
-        model_path=model_paths[model_type],
-        dataset_path=dataset_path,
-        device='cuda',
-        batch_size=64
-    )
-
-    print("\nCreating visualizations...")
-    visualize_all_results(results)
-
-    # Print top 10 most important features for each method
-    for method, scores in results.items():
-        if method == 'conv_filters':
-            continue  # Skip convolutional filter analysis for top features
-        print(f"\nTop 10 features by {method.replace('_', ' ').title()}:")
-        sorted_features: List[Tuple[str, float]] = sorted(
-            scores.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )[:10]
-        for feature, importance in sorted_features:
-            print(f"{feature}: {importance:.4f}")
+            print("\nCreating visualizations...")
+            results_dir = f'feature_importance/{feature_set}/{model_type}'
+            visualize_all_results(results, output_dir=results_dir)
+            results.pop('conv_filters', None)
+            with open(f'{results_dir}/results.json', 'w') as f:
+                json.dump(results, f, indent=4)
 
 
 if __name__ == "__main__":
