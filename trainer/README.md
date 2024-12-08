@@ -1,302 +1,112 @@
-# Training Package
+# Trainer
 
-A PyTorch-based package for training and evaluating sequence classification models with a focus on conversation and author profiling tasks.
+This package provides a comprehensive framework for training and evaluating machine learning models, specifically designed for sequence and profile classification tasks. It includes modules for data handling, model definition, training, and evaluation.
 
-## Overview
+## Features
 
-The Training package provides a comprehensive framework for:
-- Training and evaluating sequence classifiers for conversation-level analysis
-- Building author profile classifiers using aggregated conversation data
-- Supporting both single-sequence and multi-sequence classification tasks
-- Implementing advanced model architectures with transformers and multi-scale feature extraction
-
-## Key Features
-
-- **Flexible Model Architecture**
-  - Transformer-based sequence encoding
-  - Multi-scale feature aggregation using conv1d layers
-  - Residual connections and layer normalization
-  - Customizable model hyperparameters
-
-- **Advanced Training Features**
-  - Class imbalance handling with multiple weighting strategies
-  - Dynamic threshold optimization
-  - Automated model checkpointing
-  - Learning rate scheduling
-  - Comprehensive metrics tracking
-
-- **Multi-level Classification**
-  - Conversation-level classification
-  - Author-level sequence classification
-  - Profile-level aggregation with multiple strategies
+-   **Sequence Classification**: Train models to classify sequences of data, such as conversations or time series.
+-   **Profile Classification**: Aggregate sequence-level predictions to classify profiles, such as authors or users.
+-   **Customizable Models**: Define and train custom models using a flexible architecture based on Transformer encoders and convolutional layers.
+-   **Data Handling**: Efficiently load and preprocess data using custom dataset classes.
+-   **Training Utilities**: Utilize functions for training, validation, and testing, including support for different loss functions and optimization strategies.
+-   **Evaluation Metrics**: Calculate various performance metrics, including accuracy, precision, recall, F1-score, and AUC.
+-   **Weight Estimation**: Estimate positive class weights for imbalanced datasets using different methods.
 
 
-## Model Architecture
+## Usage
 
-### SequenceClassifier
+### Training a Model
 
-The core model architecture consists of:
-
-1. **Transformer Encoder**
-   - Input projection layer
-   - Positional encoding
-   - Multi-head attention layers
-   - Feed-forward networks
-
-2. **Multi-scale Feature Extraction**
-   - Multiple conv1d layers with different kernel sizes
-   - Adaptive max pooling
-   - Feature concatenation
-
-3. **Classification Head**
-   - Residual blocks
-   - Layer normalization
-   - Dropout regularization
-   - Final linear projection
+The `train_model` function [training.py] allows you to train either a conversation-level or author-level classifier.
 
 ```python
-# Initialize a sequence classifier
-model = SequenceClassifier(
-    input_size=256,          # Input feature dimension
-    hidden_size=256,         # Hidden layer dimension
-    num_layers=2,            # Number of transformer layers
-    num_heads=8,             # Number of attention heads
-    dropout=0.3,             # Dropout rate
-    kernel_sizes=[3, 5, 7]   # Conv1d kernel sizes
-)
-```
+from trainer.training import train_model
 
-### ProfileClassifier
-
-The profile classifier extends the sequence classifier for multi-sequence analysis:
-
-- Uses a pretrained sequence classifier
-- Supports multiple aggregation strategies
-- Configurable decision threshold
-
-```python
-# Create a profile classifier
-profile_model = ProfileClassifier(
-    sequence_classifier=sequence_model,
-    threshold=0.5,
-    aggregation='mean'  # Options: 'mean', 'median', 'mean_vote', 'total_vote'
-)
-```
-
-## Training
-
-### Basic Training
-
-```python
-# Train a conversation-level classifier
-model_path = train_model(
-    model_type='conversation',
-    dataset_path='data/analyzed_conversations',
-    num_epochs=50,
-    batch_size=256,
-    learning_rate=1e-4
-)
-
-# Train an author-level classifier
-author_model_path = train_model(
-    model_type='author',
-    dataset_path='data/analyzed_conversations',
-    num_epochs=75,
-    batch_size=256
-)
-```
-
-### Class Imbalance Handling
-
-The package provides multiple strategies for handling class imbalance:
-
-- **Balanced**: Simple inverse class frequency
-- **Effective**: Based on effective number of samples
-- **Focal**: Inspired by focal loss weighting
-- **Sqrt**: Square root scaling of class weights
-
-```python
-# Calculate class weights
-pos_weight = estimate_pos_weight(
-    labels=dataset.labels.numpy(),
-    method='focal'  # Options: 'balanced', 'effective', 'focal', 'sqrt'
-)
-```
-
-### Model Evaluation
-
-```python
-# Evaluate a trained model
-metrics = test_model(
-    model_type='conversation',
-    model_path='models/conversation_classifier.pt',
-    dataset_path='data/analyzed_conversations'
-)
-
-# Evaluate profile classification
-profile_metrics = evaluate_profile_classifier(
-    author_model_path='models/author_classifier.pt',
-    dataset_path='data/analyzed_conversations',
-    aggregation='mean'
-)
-```
-
-### Aggregation Methods Comparison
-
-Compare different profile-level aggregation strategies:
-
-```python
-results = compare_aggregation_methods(
-    author_model_path='models/author_classifier.pt',
-    dataset_path='data/analyzed_conversations'
-)
-```
-
-## Metrics
-
-The package tracks multiple performance metrics:
-
-- Accuracy
-- Precision
-- Recall
-- F1 Score
-- ROC AUC
-- Optimal classification threshold
-
-## Advanced Features
-
-### Custom Positional Encoding
-
-The package includes an advanced positional encoding implementation:
-
-- Sinusoidal position embeddings
-- Dynamic sequence length handling
-- Dropout regularization
-
-### Residual Blocks
-
-Custom residual blocks with:
-
-- Dual linear transformations
-- Layer normalization
-- ReLU activation
-- Configurable dropout
-
-### Weight Initialization
-
-Specialized weight initialization for different layer types:
-
-- Xavier/Glorot initialization for linear layers
-- Kaiming/He initialization for convolutional layers
-- Custom initialization for attention layers
-
-## Usage Examples
-
-### Complete Training Pipeline
-
-```python
-# 1. Train conversation classifier
+# Train a conversation classifier
 conv_model_path = train_model(
     model_type='conversation',
     dataset_path='data/analyzed_conversations',
-    num_epochs=50
+    feature_set='models',
+    feature_keys=['feat_1', 'feat_2', 'feat_3'],  # Replace with your feature keys
+    num_epochs=100,
+    batch_size=256,
+    learning_rate=1e-4,
+    device='cuda',
+    seed=42
 )
 
-# 2. Train author classifier
+# Train an author classifier
 author_model_path = train_model(
     model_type='author',
     dataset_path='data/analyzed_conversations',
-    num_epochs=75
+    feature_set='models',
+    feature_keys=['feat_1', 'feat_2', 'feat_3'],  # Replace with your feature keys
+    num_epochs=100,
+    batch_size=256,
+    learning_rate=1e-4,
+    device='cuda',
+    seed=42
+)
+```
+
+### Testing a Model
+
+The `test_model` function [training.py] allows you to evaluate a trained model on a test dataset.
+
+```python
+from trainer.training import test_model
+
+# Test a conversation classifier
+test_model(
+    model_type='conversation',
+    model_path='path/to/conversation_model.pt',
+    dataset_path='data/analyzed_conversations',
+    device='cuda',
+    seed=42
 )
 
-# 3. Evaluate models
-test_model('conversation', conv_model_path, 'data/analyzed_conversations')
-test_model('author', author_model_path, 'data/analyzed_conversations')
+# Test an author classifier
+test_model(
+    model_type='author',
+    model_path='path/to/author_model.pt',
+    dataset_path='data/analyzed_conversations',
+    device='cuda',
+    seed=42
+)
+```
 
-# 4. Compare profile aggregation methods
-compare_aggregation_methods(
-    author_model_path=author_model_path,
+### Evaluating Profile Classifier
+
+You can evaluate the profile classifier with different aggregation methods using the `compare_aggregation_methods` function.
+
+```python
+from trainer.training import evaluate_profile_classifier
+
+evaluate_profile_classifier(
+    author_model_path='path/to/author_model.pt',
     dataset_path='data/analyzed_conversations'
 )
 ```
 
-### Custom Training Loop
+### Model Architecture
 
-```python
-# Initialize model and optimizer
-model = SequenceClassifier(input_size=256)
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max')
+The package provides two main model classes:
 
-# Training loop
-for epoch in range(num_epochs):
-    # Train
-    train_loss, train_preds, train_labels = train_epoch(
-        model, train_loader, criterion, optimizer, device
-    )
-    
-    # Validate
-    val_loss, val_preds, val_labels, val_metrics, threshold = evaluate(
-        model, val_loader, criterion, device
-    )
-    
-    # Update learning rate
-    scheduler.step(val_metrics['f1'])
-```
+-   **SequenceClassifier** [models.py]: A model for classifying sequences of data. It uses a Transformer encoder followed by multi-scale feature aggregation using Conv1d layers and a classifier head.
+-   **ProfileClassifier** [models.py]: A model for classifying profiles by aggregating sequence-level predictions from a pretrained `SequenceClassifier`.
 
-## API Reference
+### Utilities
 
-### Models
+The `utils` module [utils.py] provides several helper functions for training and evaluation:
 
-#### SequenceClassifier
-- Main sequence classification model
-- Combines transformer encoding with multi-scale feature extraction
+-   `train_epoch`: Trains the model for one epoch.
+-   `evaluate`: Evaluates the model on a given dataset.
+-   `calculate_metrics_threshold`: Calculates various performance metrics with a given or optimal threshold.
+-   `estimate_pos_weight`: Estimates the positive class weight for imbalanced datasets using different methods.
 
-#### ProfileClassifier
-- Profile-level classifier using pretrained sequence model
-- Supports multiple aggregation strategies
+## Modules
 
-### Training Functions
-
-#### train_model
-- Main training function
-- Supports both conversation and author classification
-
-#### evaluate_profile_classifier
-- Evaluates profile-level classification
-- Tests different aggregation methods
-
-#### test_model
-- Evaluation function for trained models
-- Provides comprehensive metrics
-
-### Utility Functions
-
-#### estimate_pos_weight
-- Calculates class weights for imbalanced datasets
-- Supports multiple weighting strategies
-
-#### calculate_metrics_threshold
-- Computes classification metrics
-- Determines optimal classification threshold
-## Best Practices
-
-1. **Data Preparation**
-   - Clean and preprocess input features
-   - Handle missing values
-   - Normalize/standardize features
-
-2. **Model Selection**
-   - Start with default hyperparameters
-   - Adjust based on validation performance
-   - Monitor for overfitting
-
-3. **Training**
-   - Use appropriate batch size for your GPU
-   - Monitor learning rate changes
-   - Save checkpoints regularly
-
-4. **Evaluation**
-   - Use multiple metrics for assessment
-   - Compare different aggregation methods
-   - Consider domain-specific requirements
+-   `__init__.py` [__init__.py]: Initializes the package and defines the main entry points.
+-   `models.py` [models.py]: Contains the model architectures for sequence and profile classification.
+-   `utils.py` [utils.py]: Provides utility functions for training and evaluation.
+-   `training.py` [training.py]: Includes functions for training, testing, and evaluating models.

@@ -1,272 +1,119 @@
-# Conversation Analysis Dataset Package
+# DataHandler
 
 ## Overview
 
-This Python package provides a robust framework for processing, analyzing, and creating datasets from conversation data, with a focus on detecting problematic interactions. It includes tools for feature extraction, sequence analysis, and both conversation-level and author-level classification tasks.
+**DataHandler** is a Python package designed to streamline the process of loading, parsing, analyzing, and managing conversation datasets. It provides a suite of tools for handling conversation data, particularly in XML format, and offers functionalities for extracting various features, generating statistics, and preparing datasets for machine learning tasks.
 
-## Key Features
+## Key Components
 
-- Memory-efficient processing of large conversation datasets
-- Automatic feature extraction including sentiment, emotion, toxicity, and intent
-- Support for both conversation-level and author-level analysis
-- Built-in caching system for improved performance
-- Comprehensive data normalization and preprocessing
-- Flexible sequence length handling with padding/truncation
-- Integrated with HuggingFace's datasets library
-- CUDA-accelerated feature extraction
-- Weighted sampling support for imbalanced datasets
+### 1. Conversation Parser (`ConversationParser`)
 
-## Package Structure
-
-```
-datasets/
-├── __init__.py
-├── analyzer.py    # Conversation analysis and feature extraction
-├── dataset.py     # Dataset creation and processing
-└── parser.py      # XML conversation parsing
-```
-
-## Core Components
-
-### ConversationParser
-
-The `ConversationParser` class handles loading and parsing conversation data from XML files into a structured format compatible with HuggingFace datasets.
+-   **Purpose**: Loads and parses XML conversation files into a HuggingFace `datasets.Dataset`.
+-   **Functionality**:
+    -   Parses XML files containing conversation data [parser.py].
+    -   Extracts conversation ID, messages, authors, and timestamps [parser.py].
+    -   Converts time strings to `datetime` objects [parser.py].
+    -   Creates a HuggingFace `datasets.Dataset` from the parsed data [parser.py].
+    -   Saves the dataset to disk in a specified format [parser.py].
+    -   Loads a dataset from disk [parser.py].
+-   **Usage Example**:
 
 ```python
-from datasets import ConversationParser
+from datahandler import ConversationParser
 
-# Initialize parser
-parser = ConversationParser(
-    xml_path='conversations.xml',
-    max_conversations=-1  # -1 for all conversations
-)
+# Initialize the parser
+parser = ConversationParser(xml_path='path/to/conversations.xml', max_conversations=100)
 
-# Create and save dataset
+# Create a dataset
 dataset = parser.create_dataset()
-parser.save_to_disk('output_directory')
+
+# Save the dataset
+parser.save_to_disk('path/to/output/directory')
+
+# Load the dataset
+loaded_dataset = parser.load_from_disk('path/to/output/directory')
 ```
 
-### ConversationAnalyzer
+### 2. Conversation Analyzer (`ConversationAnalyzer`)
 
-The `ConversationAnalyzer` processes conversations using multiple feature extractors:
-
-- Sentiment analysis
-- Emotion detection
-- Toxicity measurement
-- Intent classification
-- Word affect analysis
+-   **Purpose**: Analyzes conversation datasets to extract features and generate statistics.
+-   **Functionality**:
+    -   Processes conversation datasets using the `map` function for memory efficiency [analyzer.py].
+    -   Extracts features such as sentiment, emotion, toxicity, intent, and word affect [analyzer.py].
+    -   Calculates conversation-level statistics (e.g., number of participants, number of messages) [analyzer.py].
+    -   Collects user statistics (e.g., message count, number of conversations, identification of attackers) [analyzer.py].
+    -   Saves analyzed datasets and statistics to disk [analyzer.py].
+-   **Usage Example**:
 
 ```python
-from datasets import ConversationAnalyzer
+from datahandler import ConversationAnalyzer
 
+# Initialize the analyzer
 analyzer = ConversationAnalyzer(batch_size=16)
 
-# Load known problematic authors list
-analyzer.load_attackers('attackers.txt')
+# Load attackers (if applicable)
+analyzer.load_attackers('path/to/attackers.txt')
 
-# Process dataset
+# Load a dataset
+dataset = datasets.load_from_disk('path/to/conversations')
+
+# Process the dataset
 analyzed_dataset = analyzer.process_dataset(dataset)
 
-# Get statistics
-user_stats = analyzer.collect_user_statistics(analyzed_dataset)
+# Save the analyzed dataset
+analyzed_dataset.save_to_disk('path/to/analyzed/conversations')
+
+# Collect and save user statistics
+user_stats_df = analyzer.collect_user_statistics(analyzed_dataset)
+user_stats_df.to_csv('path/to/user_statistics.csv', index=False)
 ```
 
-### Dataset Classes
+### 3. Dataset Classes and Data Loaders
 
-#### BaseDataset
-
-Abstract base class implementing core dataset functionality:
-
-- Caching mechanism
-- Memory-mapped loading
-- Sequence normalization
-- Vectorized operations
-
-#### ConversationSequenceDataset
-
-Handles conversation-level sequence classification:
-
-```python
-from datasets import ConversationSequenceDataset
-
-dataset = ConversationSequenceDataset(
-    dataset_path='analyzed_conversations',
-    max_seq_length=50,
-    min_seq_length=5,
-    normalize=True
-)
-```
-
-#### AuthorConversationSequenceDataset
-
-Focuses on author-level sequence classification:
+-   **Purpose**: Provides classes for handling datasets with features like caching, memory-mapped loading, batch processing, and normalization.
+-   **Classes**:
+    -   `BaseDataset`: Base class for datasets [dataset.py].
+    -   `ConversationSequenceDataset`: Dataset for conversation-level sequences [dataset.py].
+    -   `AuthorConversationSequenceDataset`: Dataset for author-level sequences [dataset.py].
+-   **Functionality**:
+    -   Implements caching to speed up data loading [dataset.py].
+    -   Supports memory-mapped loading for large datasets [dataset.py].
+    -   Performs batch processing and vectorized operations [dataset.py].
+    -   Calculates normalization parameters (mean and standard deviation) [dataset.py].
+    -   Provides data loaders for training, validation, and testing [dataset.py].
+-   **Usage Example**:
 
 ```python
-from datasets import AuthorConversationSequenceDataset
+from datahandler import ConversationSequenceDataset, AuthorConversationSequenceDataset, create_dataloaders
 
-dataset = AuthorConversationSequenceDataset(
-    dataset_path='analyzed_conversations',
-    max_seq_length=30,
-    min_seq_length=5,
-    normalize=True
-)
-```
+# Create a conversation dataset
+conv_dataset = ConversationSequenceDataset('path/to/analyzed/conversations', normalize=True)
 
-## Data Processing Pipeline
-
-1. **XML Parsing**: Load raw conversation data
-   ```python
-   parser = ConversationParser('input.xml')
-   raw_dataset = parser.create_dataset()
-   ```
-
-2. **Feature Extraction**: Process conversations with multiple analyzers
-   ```python
-   analyzer = ConversationAnalyzer()
-   analyzed_dataset = analyzer.process_dataset(raw_dataset)
-   ```
-
-3. **Dataset Creation**: Create specialized datasets for training
-   ```python
-   conv_dataset = ConversationSequenceDataset(
-       dataset_path='analyzed_data',
-       max_seq_length=50
-   )
-   ```
-
-4. **DataLoader Creation**: Prepare data for model training
-   ```python
-   train_loader, val_loader, test_loader = create_dataloaders(
-       conv_dataset,
-       batch_size=32,
-       train_split=0.8,
-       val_split=0.1
-   )
-   ```
-
-## Feature Extraction Details
-
-The package extracts several types of features:
-
-- **Sentiment**: Overall message sentiment (positive/negative/neutral)
-- **Emotions**: Detection of specific emotions in messages
-- **Toxicity**: Measurement of harmful content
-- **Intent**: Classification of message purpose
-- **Word Affect**: Emotional impact of word choices
-
-## Memory Efficiency Features
-
-- Batch processing for large datasets
-- Memory-mapped file loading
-- Efficient caching system
-- Vectorized operations for feature extraction
-- GPU acceleration for feature extractors
-
-## Performance Optimization
-
-### Caching System
-The package implements a sophisticated caching system:
-
-```python
-# Cache handling is automatic
-dataset = ConversationSequenceDataset(
-    dataset_path='data',
-    cache_prefix="conv"  # Defines cache file naming
-)
-```
-
-### Batch Processing
-Optimized batch processing for memory efficiency:
-
-```python
-analyzer = ConversationAnalyzer(batch_size=16)
-analyzed_dataset = analyzer.process_dataset(dataset)
-```
-
-## Working with Imbalanced Data
-
-The package provides built-in support for handling imbalanced datasets through weighted sampling:
-
-```python
-train_loader, val_loader, test_loader = create_dataloaders(
-    dataset,
-    batch_size=32,
-    use_weighted_sampler=True
-)
-```
-
-## Error Handling and Validation
-
-The package includes comprehensive error checking:
-
-- Validation of input data formats
-- Checking for NaN/Inf values
-- Sequence length validation
-- Feature compatibility verification
-
-## Usage Examples
-
-### Complete Pipeline Example
-
-```python
-from datasets import (
-    ConversationParser,
-    ConversationAnalyzer,
-    ConversationSequenceDataset,
-    create_dataloaders
-)
-
-# Parse raw data
-parser = ConversationParser('conversations.xml')
-raw_dataset = parser.create_dataset()
-parser.save_to_disk('raw_data')
-
-# Analyze conversations
-analyzer = ConversationAnalyzer(batch_size=16)
-analyzer.load_attackers('attackers.txt')
-analyzed_dataset = analyzer.process_dataset(raw_dataset)
-analyzed_dataset.save_to_disk('analyzed_data')
-
-# Create sequence dataset
-conv_dataset = ConversationSequenceDataset(
-    dataset_path='analyzed_data',
-    max_seq_length=50,
-    normalize=True
-)
+# Create an author dataset
+author_dataset = AuthorConversationSequenceDataset('path/to/analyzed/conversations', normalize=True)
 
 # Create data loaders
-train_loader, val_loader, test_loader = create_dataloaders(
-    conv_dataset,
-    batch_size=32,
-    train_split=0.8,
-    val_split=0.1,
-    use_weighted_sampler=True
-)
+conv_train, conv_val, conv_test = create_dataloaders(conv_dataset, batch_size=32)
+author_train, author_val, author_test = create_dataloaders(author_dataset, batch_size=32)
 ```
 
-### Analyzing User Statistics
+## Installation
+
+To install **DataHandler**, clone the repository and install the required dependencies:
+
+```bash
+git clone <repository_url>
+cd datahandler
+pip install -r requirements.txt
+```
+
+## Usage
+
+The `__init__.py` file provides a convenient way to import the key components of the package:
 
 ```python
-# Get user-level statistics
-analyzer = ConversationAnalyzer()
-user_stats = analyzer.collect_user_statistics(analyzed_dataset)
-user_stats.to_csv('user_statistics.csv')
-
-# Get conversation-level statistics
-conv_stats = get_conversation_statistics(analyzed_dataset)
-conv_stats.to_csv('conversation_statistics.csv')
+from datahandler import ConversationSequenceDataset, AuthorConversationSequenceDataset, create_dataloaders, ConversationAnalyzer, ConversationParser, BaseDataset
 ```
 
-## Debug and Monitoring Tools
+Refer to the individual component documentation above for detailed usage examples.
 
-The package includes utilities for monitoring dataset processing:
-
-```python
-from datasets import print_dataset_stats
-
-# Print detailed statistics
-print_dataset_stats(dataset, "Dataset Name")
-
-# Check data loader integrity
-check_data(train_loader)
-```

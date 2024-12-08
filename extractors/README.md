@@ -1,15 +1,57 @@
 # Extractors
 
-A comprehensive Python package for extracting linguistic features, emotions, sentiment, toxicity, and intent from text using state-of-the-art transformer models.
+## Introduction
+The Extractors package is a sophisticated text analysis toolkit designed to extract various linguistic and behavioral features from text data. It leverages transformer-based models to analyze multiple dimensions of text, including sentiment, emotions, toxicity, intent, and psycholinguistic features.
 
-## Features
+The package employs a modular approach with a base abstract class and specialized extractors, each focused on specific aspects of text analysis. All extractors support both single-text and batch processing, with efficient handling of long texts through automatic chunking and aggregation.
 
-- **Sentiment Analysis**: Detect positive, negative, and neutral sentiment with confidence scores
-- **Emotion Detection**: Analyze multiple emotions (happiness, sadness, anger, fear, surprise, disgust) with intensity scores
-- **Toxicity Detection**: Identify various forms of toxic content including severe toxicity, obscenity, threats, insults, and identity attacks
-- **Intent Classification**: Recognize multiple conversation intents including trust building, manipulation, isolation attempts, and more
-- **Linguistic Features**: Extract psycholinguistic features like valence, arousal, dominance, age of acquisition, and concreteness
-- **Efficient Processing**: Batch processing, automatic text chunking, and GPU acceleration support
+## Components
+
+### Base Classes
+- **FeatureExtractor**: Abstract base class defining the interface for all feature extractors. Handles basic functionality like feature validation and batch processing.
+- **TransformerExtractor**: Base implementation for transformer-based extractors. Manages text chunking, batching, and device management.
+
+### Specialized Extractors
+- **Word2AffectExtractor**: Implementation of the VAD+ approach from Plisiecki & Sobieszek (2024) [DOI: 10.3758/s13428-023-02212-3]. Uses transformer-based architecture to analyze five key psycholinguistic dimensions: Valence (emotional positivity/negativity, r=0.95), Arousal (intensity of emotion), Dominance (sense of control), Age of Acquisition (when a word is typically learned), and Concreteness (how tangible/abstract a concept is, r=0.95). Model available on [Hugging Face](https://huggingface.co/hplisiecki/word2affect_english).
+   - Features: Valence, Arousal, Dominance, Age of Acquisition, Concreteness
+
+- **ToxicityExtractor**: Implements toxic comment classification using the Detoxify library (Hanu & Unitary team, 2020). Utilizes transformer-based models trained on three Jigsaw challenges: Toxic Comment Classification, Unintended Bias, and Multilingual Classification. The extractor supports three model variants:
+   - Original model (BERT-based): Trained on Wikipedia comments, achieves 98.64% AUC score
+   - Unbiased model (RoBERTa-based): Trained to minimize unintended bias, achieves 93.74% AUC score
+   - Multilingual model (XLM-RoBERTa-based): Supports 7 languages with 92.11% AUC score
+   - Features: toxicity, severe_toxicity, obscene, threat, insult, identity_attack
+   - Additional bias metrics available for identity groups including gender, religion, and race
+
+- **SentimentExtractor**: Implements sentiment analysis using cardiffnlp/twitter-roberta-base-sentiment-latest (Camacho-Collados et al., 2022), trained on ~124M tweets (2018-2021) and fine-tuned on the TweetEval benchmark. Specialized in social media text analysis.
+   - Base Model: RoBERTa trained on social media content
+   - Features: sentiment_positive, sentiment_negative, sentiment_neutral
+   - Preprocessing: Automatically handles @mentions and URL links
+   - Output: Confidence scores for each sentiment class
+   - Optimal for: Social media content, informal text, and contemporary language
+
+- **EmotionExtractor**: Uses RoBERTa-base model fine-tuned on the GoEmotions dataset (SamLowe/roberta-base-go_emotions) for multi-label emotion classification. The model is trained on Reddit data and can detect multiple emotions simultaneously.
+   - Base Model: RoBERTa trained on social media content
+   - Dataset: GoEmotions (Reddit-based, 28 emotion labels)
+   - Features: Comprehensive emotion detection including admiration, amusement, anger, annoyance, approval, caring, confusion, curiosity, desire, disappointment, disapproval, disgust, embarrassment, excitement, fear, gratitude, grief, joy, love, nervousness, optimism, pride, realization, relief, remorse, sadness, surprise, and neutral
+   - Performance: Strong accuracy for well-represented emotions (e.g., gratitude: 96% precision, love: 80% F1-score)
+   - Output: Probability scores for each emotion (threshold of 0.5 typically applied)
+
+- **IntentExtractor**: Implements zero-shot intent classification using BART-large-MNLI (facebook/bart-large-mnli), trained on the MultiNLI dataset. Uses a novel approach of posing intent classification as a natural language inference task.
+   - Base Model: BART-large fine-tuned on MNLI
+   - Methodology: Zero-shot classification by converting intents to natural language hypotheses
+   - Features: Detects 10 conversation intents: trust_building, isolation_attempt, boundary_testing, personal_probing, manipulation, secrecy_pressure, authority_undermining, reward_offering, normalization, meeting_planning
+   - Output: Independent probability scores for each intent category
+   - Advantage: Can be easily extended to detect new intent types without retraining
+
+## Structure
+
+```
+extractors/
+├── __init__.py            # Package initialization and feature set definitions
+├── extractor.py           # Base abstract class definition
+├── TransformerExtractors.py   # Implementation of transformer-based extractors
+└── word2affect.py         # Custom model for psycholinguistic feature extraction
+```
 
 ## Installation
 
@@ -58,211 +100,11 @@ print("Emotions:", emotion_scores)
 # }
 ```
 
-## Detailed Usage
-
-### Base Feature Extractor
-
-All extractors inherit from the `FeatureExtractor` base class, which provides common functionality:
-
-```python
-from extractors import FeatureExtractor
-
-class CustomExtractor(FeatureExtractor):
-    def __init__(self, config=None):
-        super().__init__(config)
-        self._feature_names = {'feature1', 'feature2'}
-    
-    def extract(self, text):
-        # Implementation
-        pass
-
-    def get_feature_ranges(self):
-        return {
-            'feature1': (0.0, 1.0),
-            'feature2': (0.0, 1.0)
-        }
-```
-
-### Sentiment Analysis
-
-The `SentimentExtractor` uses RoBERTa for advanced sentiment analysis:
-
-```python
-from extractors import SentimentExtractor
-
-# Initialize with custom config
-config = {
-    'device': 'cuda',  # Use GPU if available
-    'batch_size': 32   # Adjust based on your needs
-}
-sentiment = SentimentExtractor(config)
-
-# Analyze multiple texts efficiently
-texts = [
-    "This is amazing!",
-    "I'm not sure about this.",
-    "This is terrible."
-]
-results = sentiment.batch_extract(texts)
-```
-
-### Emotion Detection
-
-The `EmotionExtractor` uses the GoEmotions dataset for fine-grained emotion detection:
-
-```python
-from extractors import EmotionExtractor
-
-emotion = EmotionExtractor()
-
-# Single text analysis
-text = "I can't believe how wonderful this is!"
-emotions = emotion.extract(text)
-
-# Access specific emotions
-happiness = emotions['emotion_happy']
-intensity = emotions['emotion_intensity']
-```
-
-### Toxicity Detection
-
-The `ToxicityExtractor` identifies various forms of toxic content:
-
-```python
-from extractors import ToxicityExtractor
-
-toxicity = ToxicityExtractor()
-
-text = "Your opinion is valuable and I respect it."
-toxicity_scores = toxicity.extract(text)
-print(toxicity_scores)
-# Output: {
-#     'toxicity': 0.01,
-#     'severe_toxicity': 0.00,
-#     'obscene': 0.00,
-#     'threat': 0.00,
-#     'insult': 0.01,
-#     'identity_attack': 0.00
-# }
-```
-
-### Intent Classification
-
-The `IntentExtractor` uses zero-shot classification to identify conversation intents:
-
-```python
-from extractors import IntentExtractor
-
-intent = IntentExtractor()
-
-text = "Let's keep this conversation between us."
-intent_scores = intent.extract(text)
-print(intent_scores)
-# Output: {
-#     'intent_secrecy_pressure': 0.85,
-#     'intent_isolation_attempt': 0.45,
-#     'intent_trust_building': 0.30,
-#     ...
-#     'intent_confidence': 0.85
-# }
-```
-
-### Word2Affect Features
-
-Extract psycholinguistic features using the `Word2AffectExtractor`:
-
-```python
-from extractors import Word2AffectExtractor
-
-w2a = Word2AffectExtractor()
-
-text = "I feel energized and confident about this decision!"
-features = w2a.extract(text)
-print(features)
-# Output: {
-#     'Valence': 0.82,
-#     'Arousal': 0.65,
-#     'Dominance': 0.75,
-#     'Age of Acquisition': 0.45,
-#     'Concreteness': 0.30
-# }
-```
-
-## Advanced Features
-
-### Text Chunking
-
-All extractors automatically handle long texts by chunking them into smaller pieces with overlap:
-
-```python
-from extractors import SentimentExtractor
-
-sentiment = SentimentExtractor()
-long_text = "..." # Very long text
-
-# Automatically chunks text and averages results
-results = sentiment.extract(long_text)
-```
-
 ### Batch Processing
-
-Process multiple texts efficiently:
-
 ```python
-from extractors import ToxicityExtractor
-
-toxicity = ToxicityExtractor({'batch_size': 64})
-
-# Process many texts at once
-texts = ["text1", "text2", "text3", ...]
-results = toxicity.batch_extract(texts)
-```
-
-### Custom Configuration
-
-All extractors accept a configuration dictionary for customization:
-
-```python
-config = {
-    'device': 'cuda',  # Use GPU
-    'batch_size': 32,  # Batch size for processing
-}
-
-# Apply config to any extractor
-from extractors import EmotionExtractor
-emotion = EmotionExtractor(config)
-```
-
-## Performance Considerations
-
-- All extractors support GPU acceleration when available
-- Batch processing is more efficient than processing texts individually
-- Text chunking helps handle long texts while maintaining accuracy
-- Models are loaded lazily upon first use to conserve memory
-
-## Error Handling
-
-The extractors include robust error handling:
-
-```python
-from extractors import SentimentExtractor
-
-sentiment = SentimentExtractor()
-
-# Empty or invalid texts return zero scores
-result = sentiment.extract("")
-# Returns: {'sentiment_positive': 0.0, 'sentiment_neutral': 0.0, ...}
-
-# Batch processing handles errors gracefully
-texts = ["valid text", "", None, "another text"]
+texts = ["Great day!", "This is terrible.", "Just okay."]
 results = sentiment.batch_extract(texts)
-# Returns valid results for valid texts, zero scores for invalid ones
 ```
 
-## Best Practices
-
-1. **Batch Processing**: Use `batch_extract()` for multiple texts
-2. **GPU Usage**: Set device='cuda' in config when GPU is available
-3. **Memory Management**: Initialize extractors only when needed
-4. **Text Cleaning**: Input text is automatically cleaned, but pre-cleaning sensitive data is recommended
-5. **Error Handling**: Always validate extractor outputs using `validate_features()`
+## Summary
+The Extractors package is a comprehensive toolkit for multi-dimensional text analysis, combining various transformer-based models to extract linguistic, emotional, and behavioral features. Its modular design allows for easy extension and customization, while built-in optimizations ensure efficient processing of both single texts and large batches. The package is particularly suited for applications in content moderation, conversation analysis, user behavior understanding, and general text mining tasks.

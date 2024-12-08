@@ -1,215 +1,41 @@
-# Visualization Package
+# Visualization
 
-A comprehensive Python package for analyzing and visualizing dataset features, sequential patterns, and model interpretability through various feature importance methods.
+## Description
 
-## Overview
+This package provides a comprehensive set of tools for analyzing and visualizing dataset features, sequential patterns, and model interpretability, specifically designed for **identifying relevant features in detecting sexual predators in online conversations**. It leverages various feature importance methods and statistical analyses to provide insights into the characteristics of predatory behavior in textual data.
 
-The Visualization package provides tools for:
-- Dataset feature analysis and visualization
-- Sequential pattern analysis
-- Feature importance computation using multiple methods
-- Model interpretability
-- Temporal correlation analysis
-
-The package supports both conversation-level and author-level analyses, making it suitable for text analysis and user behavior studies.
-
+The package supports both conversation-level and author-level analyses, making it suitable for text analysis and user behavior studies in the context of online safety.
 
 ## Key Components
 
-### 1. Dataset Analysis (`dataset_analysis.py`)
+### 1. Dataset Analysis (`dataset_analysis.py`) [dataset_analysis.py]
 
-Provides tools for analyzing dataset features and their distributions:
+Provides tools for analyzing dataset features and their distributions, crucial for understanding the underlying patterns in online conversations:
 
-- Feature correlation analysis
-- Distribution statistics
-- Temporal pattern analysis
-- Class-wise feature analysis
+*   **Feature correlation analysis:** Identifies relationships between different features, highlighting potential indicators of predatory behavior [dataset_analysis.py].
+*   **Distribution statistics:** Calculates mean, standard deviation, skewness, kurtosis, and KL divergence to understand feature distributions and differences between safe and predatory conversations [dataset_analysis.py].
+*   **Temporal pattern analysis:** Examines how features change over time within a conversation, revealing evolving patterns [dataset_analysis.py].
+*   **Class-wise feature analysis:** Compares feature distributions between conversations flagged as predatory and those that are not, pinpointing key differentiators [dataset_analysis.py].
 
-```python
-from visualization import analyze_dataset_features
+### 2. Feature Importance Analysis (`feature_importance.py`) [feature_importance.py]
 
-# Analyze dataset features
-results = analyze_dataset_features(
-    dataloader=train_loader,
-    feature_names=dataset.feature_keys,
-    output_dir='dataset_analysis'
-)
+Implements multiple interpretability methods to determine the most relevant features for detecting sexual predators:
+
+*   **SHAP (SHapley Additive exPlanations):** Uses game theory to measure each feature's contribution to model predictions, considering all possible feature combinations. Provides both global and local explanations, highlighting feature interactions crucial for identifying complex predatory patterns [feature_importance.py].
+*   **Integrated Gradients (IG):** Attributes importance by accumulating gradients along a path from a baseline to the input, satisfying implementation invariance and providing attribution symmetry. Captures feature interactions implicitly, offering insights into the model's decision-making process [feature_importance.py].
+*   **Attention Attribution:** Analyzes attention weights in transformer-based models, revealing which parts of the conversation the model focuses on. Identifies important sequence positions and helps understand temporal dependencies in predatory conversations [feature_importance.py].
+*   **Feature Ablation:** Measures feature importance by observing changes in model performance when features are removed. Provides a direct measure of performance impact, identifying redundant features and dependencies, crucial for model optimization in predator detection [feature_importance.py].
+*   **Permutation Importance:** Assesses feature importance by randomly shuffling feature values and measuring the impact on model performance. This model-agnostic method maintains feature distributions, accounts for feature interactions, and provides robust importance estimates [feature_importance.py].
+*   **Gradient Saliency:** Computes feature importance using input gradients with respect to the model output. Offers computationally efficient local explanations, captures feature sensitivity, and can be smoothed for stability [feature_importance.py].
+*   **Convolutional Filter Analysis:** Examines learned filters in convolutional layers to understand pattern detection capabilities, feature hierarchies, learned representations, and filter specialization, relevant for identifying specific linguistic patterns in predatory conversations [feature_importance.py].
+
+## Installation
+
+```bash
+pip install visualization-package
 ```
 
-The dataset analysis module examines:
-
-#### Distribution Statistics
-- Mean and standard deviation: Captures central tendency and spread
-- Skewness: Measures asymmetry in feature distributions
-- Kurtosis: Indicates the presence of outliers and tail behavior
-- KL Divergence: Quantifies differences between class distributions
-
-#### Correlation Analysis
-- Pearson correlation between features
-- Class-conditional correlations
-- Hierarchical clustering of correlated features
-
-These analyses help identify:
-- Feature redundancy
-- Class-discriminative features
-- Data quality issues
-- Potential preprocessing needs
-
-#### Sequential Analysis
-
-Analyze temporal patterns and correlations in sequential data:
-
-```python
-from visualization import analyze_sequential_features
-
-# Analyze sequential patterns
-results = analyze_sequential_features(
-    dataloader=test_loader,
-    feature_names=dataset.feature_keys,
-    output_dir='sequential_analysis'
-)
-```
-
-Sequential analysis examines:
-
-- Temporal Autocorrelation: Measures how a feature correlates with itself over time
-- Cross-feature Temporal Correlations: Identifies relationships between features across time steps
-- Trajectory Analysis: Studies how features evolve over sequences
-- Pattern Divergence: Quantifies differences in temporal patterns between classes
-
-### 2. Feature Importance Analysis (`feature_importance.py`)
-
-The feature importance module implements multiple interpretability methods, each offering unique insights into model behavior:
-
-#### SHAP (SHapley Additive exPlanations)
-SHAP values provide a game-theoretic approach to feature importance. They measure each feature's contribution to model predictions by considering all possible feature combinations. SHAP values:
-- Are theoretically grounded in cooperative game theory
-- Provide both global and local explanations
-- Account for feature interactions
-- Are consistent and locally accurate
-
-```python
-shap_values = compute_shap_values(
-    inputs=batch_data,
-    model=trained_model,
-    num_samples=100
-)
-```
-
-#### Integrated Gradients
-Integrated Gradients (IG) attributes importance by accumulating gradients along a path from a baseline to the input. This method:
-- Satisfies implementation invariance
-- Provides attribution symmetry
-- Is computationally efficient
-- Captures feature interactions implicitly
-
-```python
-ig_attributions = compute_integrated_gradients(
-    inputs=batch_data,
-    model=trained_model,
-    device='cuda',
-    steps=50
-)
-```
-
-#### Attention Attribution
-Analyzes the attention weights in transformer-based models to understand which input elements the model focuses on. This method:
-- Provides insight into model decision-making
-- Identifies important sequence positions
-- Helps understand temporal dependencies
-- Visualizes feature relationships
-
-```python
-attn_weights, attn_attribution = compute_attention_attribution(
-    inputs=batch_data,
-    model=trained_model
-)
-```
-
-#### Feature Ablation
-Measures feature importance by observing changes in model performance when features are removed. This approach:
-- Is model-agnostic
-- Provides direct performance impact measurement
-- Can identify redundant features
-- Helps understand feature dependencies
-
-```python
-ablation_scores = compute_feature_ablation(
-    dataloader=test_loader,
-    model=trained_model,
-    device='cuda',
-    feature_names=feature_names,
-    metric_fn=f1_score
-)
-```
-
-#### Permutation Importance
-Assesses feature importance by randomly shuffling feature values and measuring the impact on model performance. This method:
-- Is model-agnostic
-- Maintains feature distributions
-- Accounts for feature interactions
-- Provides robust importance estimates
-
-#### Gradient Saliency
-Computes feature importance using input gradients with respect to the model output. The method:
-- Is computationally efficient
-- Provides local explanations
-- Captures feature sensitivity
-- Can be smoothed for stability
-
-#### Convolutional Filter Analysis
-Examines learned filters in convolutional layers to understand:
-- Pattern detection capabilities
-- Feature hierarchies
-- Learned representations
-- Filter specialization
-
-## Visualization Functions
-
-The package includes comprehensive visualization tools:
-
-### Feature Importance Visualization
-```python
-visualize_feature_importance(
-    importance_scores=results['ablation'],
-    top_k=10,
-    title="Feature Ablation Importance"
-)
-```
-
-### All Results Visualization
-```python
-visualize_all_results(
-    results=all_analysis_results,
-    output_dir='feature_importance_plots'
-)
-```
-
-## Output Directory Structure
-
-```
-output/
-├── dataset_analysis/
-│   ├── feature_correlation_all.png
-│   ├── feature_correlation_positive.png
-│   ├── feature_correlation_negative.png
-│   └── distribution_*.png
-├── sequential_analysis/
-│   ├── temporal_autocorr_all.png
-│   ├── cross_feature_temporal_corr_all.png
-│   └── trajectory_*.png
-└── feature_importance_plots/
-    ├── ablation_importance.png
-    ├── integrated_gradients_importance.png
-    ├── attention_importance.png
-    ├── shap_importance.png
-    ├── saliency_importance.png
-    ├── permutation_importance.png
-    ├── conv_filter_importance.png
-    └── method_correlation.png
-```
-
-## Example Usage
+## Usage
 
 ### Basic Analysis Pipeline
 
@@ -223,24 +49,30 @@ from visualization import (
 # 1. Dataset Analysis
 dataset_results = analyze_dataset_features(
     dataloader=train_loader,
-    feature_names=dataset.feature_keys
+    feature_names=dataset.feature_keys,
+    output_dir='dataset_analysis/{feature_set}/{model_type}'
 )
 
 # 2. Sequential Analysis
 sequential_results = analyze_sequential_features(
     dataloader=test_loader,
-    feature_names=dataset.feature_keys
+    feature_names=dataset.feature_keys,
+    output_dir='sequence_analysis/{feature_set}/{model_type}'
 )
 
 # 3. Feature Importance Analysis
 importance_results = analyze_feature_importance(
-    model_type='conversation',
-    model_path='models/model.pt',
-    dataset_path='data/dataset'
+    model_type='conversation',  # or 'author'
+    model_path='models/predator_detection_model.pt',
+    dataset_path='data/conversations',
+    feature_keys=dataset.feature_keys,
+    device='cuda',
+    batch_size=64,
+    output_dir='feature_importance/{feature_set}/{model_type}'
 )
 
 # 4. Visualize Results
-visualize_all_results(importance_results)
+visualize_all_results(importance_results, output_dir=f'feature_importance/{{feature_set}}/{{model_type}}')
 ```
 
 ### Custom Analysis
@@ -266,16 +98,70 @@ saliency_scores = compute_gradient_saliency(
 ## Configuration
 
 ### Model Types
-- 'conversation': For conversation-level analysis
-- 'author': For author-level analysis
+- 'conversation': For conversation-level analysis [feature_importance.py]
+- 'author': For author-level analysis [feature_importance.py]
 
 ### Dataset Parameters
-- max_seq_length: Maximum sequence length (default: 256)
-- min_seq_length: Minimum sequence length (default: 8)
-- batch_size: Batch size for data loading (default: 64)
+- max_seq_length: Maximum sequence length (default: 256) [dataset_analysis.py]
+- min_seq_length: Minimum sequence length (default: 8) [dataset_analysis.py]
+- batch_size: Batch size for data loading (default: 64) [feature_importance.py]
 
 ### Analysis Parameters
-- num_samples: Number of samples for SHAP analysis (default: 100)
-- steps: Number of steps for Integrated Gradients (default: 50)
-- smooth_samples: Number of samples for gradient smoothing (default: 50)
-- noise_scale: Scale of noise for gradient saliency (default: 0.1)
+- num_samples: Number of samples for SHAP analysis (default: 100) [feature_importance.py]
+- steps: Number of steps for Integrated Gradients (default: 50) [feature_importance.py]
+- smooth_samples: Number of samples for gradient smoothing (default: 50) [feature_importance.py]
+- noise_scale: Scale of noise for gradient saliency (default: 0.1) [feature_importance.py]
+
+## Visualization Functions
+
+### Feature Importance Visualization
+```python
+visualize_feature_importance(
+    importance_scores=results['ablation'],
+    top_k=10,
+    title="Feature Ablation Importance"
+)
+```
+
+### All Results Visualization
+```python
+visualize_all_results(
+    results=all_analysis_results,
+    output_dir=f'feature_importance/{{feature_set}}/{{model_type}}'
+)
+```
+
+## Output Directory Structure
+
+```
+.
+├── dataset_analysis/
+│   └── {feature_set}/
+│       └── {model_type}/
+│           ├── distribution_*.png
+│           ├── correlation_heatmap_all.png
+│           ├── correlation_heatmap_positive.png
+│           └── correlation_heatmap_negative.png
+├── sequence_analysis/
+│   └── {feature_set}/
+│       └── {model_type}/
+│           ├── temporal_autocorr_all.png
+│           ├── temporal_autocorr_positive.png
+│           ├── temporal_autocorr_negative.png
+│           ├── time_lagged_cross_corr_all.png
+│           ├── time_lagged_cross_corr_positive.png
+│           ├── time_lagged_cross_corr_negative.png
+│           └── trajectory_*.png
+└── feature_importance/
+    └── {feature_set}/
+        └── {model_type}/
+            ├── ablation_importance.png
+            ├── integrated_gradients_importance.png
+            ├── attention_importance.png
+            ├── shap_importance.png
+            ├── saliency_importance.png
+            ├── permutation_importance.png
+            ├── conv_filter_importance.png
+            ├── method_correlation.png
+            └── results.json
+```
